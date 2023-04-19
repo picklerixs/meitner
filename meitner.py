@@ -173,7 +173,7 @@ class Pes:
     
     def generate_params(self, keys_list=None,
                         lineshape="voigt",
-                        beGuess=False, constrainPeakRatios=False,
+                        be_guess=None, constrainPeakRatios=False,
                         constrainPeakSpacings=False,
                         constrainGL=True, alignPeaks="all", constrainFwhm="all", constraints=False,
                         exprConstraints=False, maxFwhm=np.inf, maxGlmix=1, minGlmix=0,
@@ -181,24 +181,49 @@ class Pes:
         
         if keys_list == None:
             keys_list = self.keys_list
+            
+        len_keys_list = len(keys_list)
         
         self.params = Parameters()
+        
+        # each entry in be_guess_dict contains a list of guess positions for each region
+        if isinstance(be_guess, dict):
+            be_guess_dict = be_guess
+        else:
+            be_guess_dict = {}
+            
+        if be_guess == None:
+            be_guess_list = 
+        elif isinstance(be_guess, dict):
+            be_guess_dict = be_guess
+        elif self.is_float_or_int(be_guess):
+            for key in keys_list:
+                for i in range
+            be_guess_dict = {}
+        elif self.is_list_or_tuple(be_guess):
+            if self.is_float_or_int(be_guess[0]):
+                
+            elif self.is_list_or_tuple(be_guess[0]):
+                
+        
+        
 
         for key in keys_list:
             x = self.df_dict[key]['be']
             y = self.df_dict[key]['cps']
                 
-            # peak parameters
+            # set number of peaks for each dataframe
             if isinstance(self.n_peaks,int):
                 n = self.n_peaks
-                nmin = 0
             elif isinstance(self.n_peaks,dict):
                 n = self.n_peaks[key]
-                nmin = self.n_peaks[min(self.n_peaks, key=self.n_peaks.get)]
-            if isinstance(beGuess,dict):
-                peakCenter = beGuess[key]
+                
+            if self.is_float_or_int(be_guess):
+                
+            if isinstance(be_guess,dict):
+                peakCenter = be_guess[key]
             else:
-                peakCenter = beGuess
+                peakCenter = be_guess
                 
             for k in range(n):
                 peakId = "data_"+key+"_p"+str(k)+"_"
@@ -349,6 +374,9 @@ class Pes:
         self.model = model
         if isinstance(self.n_peaks, dict):
             n_peaks = self.n_peaks[key]
+        elif self.is_list_or_tuple(n_peaks):
+            # TODO get index in df_dict from key
+            pass
         elif self.is_float_or_int(self.n_peaks):
             n_peaks = self.n_peaks
         for k in range(n_peaks):
