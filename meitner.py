@@ -7,10 +7,11 @@ import warnings
 from vamas import Vamas
 from scipy.special import wofz
 from lmfit import Parameters
+
+
 class Pes:
     
     # fitting options
-    n_peaks = 1
     background = 'shirley'
     params = {}
     
@@ -19,6 +20,7 @@ class Pes:
     def __init__(self, df_dict):
         self.df_dict = df_dict
         self.keys_list = list(df_dict.keys())
+        self.n_peaks = self.set_n_peaks(1)
         
     def plot_survey(self, keys_list=None, **kwargs):
         if keys_list == None:
@@ -168,16 +170,37 @@ class Pes:
         return voigtfunction*amplitude
     
     @staticmethod
+    # borrowed from Andreas Seibert
+    def calc_voigt_fwhm(sigma, gamma):
+        fl = 2*gamma
+        fg = 2*sigma
+        return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
+    
+    @staticmethod
     def linear(x, slope, intercept):
         return slope*x + intercept
     
-    def generate_params(self, keys_list=None,
+    def generate_params(self, be_guess, keys_list=None,
+                        # general parameters
                         lineshape="voigt",
-                        be_guess=None, constrainPeakRatios=False,
-                        constrainPeakSpacings=False,
-                        constrainGL=True, alignPeaks="all", constrainFwhm="all", constraints=False,
-                        exprConstraints=False, maxFwhm=np.inf, maxGlmix=1, minGlmix=0,
-                        uniformSigma="within", *args):
+                        peak_ratios=False, peak_spacings=False,
+                        expr_constraints=None,
+                        # voigt/pseudo-voigt specific parameters (will not apply to pure gaussian or lorentzian peaks)
+                        align_peaks=None, match_fwhm=None, fwhm_max=3, fwhm_min=0,
+                        glmix_guess=0.5, glmix_max=1, glmix_min=0, glmix_vary=True, match_glmix=False,
+                        sigma_guess=1, sigma_max=np.inf, sigma_min=0, sigma_vary=True, match_sigma='within',
+                        gamma_guess=1, gamma_max=np.inf, gamma_min=0, gamma_vary=True, match_gamma=False,
+                        *args, **kwargs):
+        '''
+        match:
+            False: all varied independently
+            'within': peaks within a single spectrum are matched to p0 in that spectrum
+            True: all matched to p0 in first spectrum
+        match_glmix only applies to pseudo-voigt peaks. Use match_sigma=True and match_gamma=True to contrain
+        glmix for voigt peaks.
+        '''
+        
+        # TODO if number of peaks is different for each spectrum, allow user to specify which peaks get aligned
         
         if keys_list == None:
             keys_list = self.keys_list
@@ -187,107 +210,102 @@ class Pes:
         self.params = Parameters()
         
         # each entry in be_guess_dict contains a list of guess positions for each region
+        # preferred input
         if isinstance(be_guess, dict):
-            be_guess_dict = be_guess
-        else:
-            be_guess_dict = {}
-            
-        if be_guess == None:
-            be_guess_list = 
-        elif isinstance(be_guess, dict):
-            be_guess_dict = be_guess
+            # subset
+            self.be_guess = {key: be_guess[key] for key in keys_list}
+            # TODO add check to ensure dict keys match
+        # convert a single-valued input into expected dict format
         elif self.is_float_or_int(be_guess):
-            for key in keys_list:
-                for i in range
-            be_guess_dict = {}
+                self.be_guess = {key: [be_guess for _ in range(self.n_peaks[key])] for key in keys_list}
         elif self.is_list_or_tuple(be_guess):
+            # convert a list of single-valued inputs into expected dict format
             if self.is_float_or_int(be_guess[0]):
-                
+                self.be_guess = {key: [be_guess[k] for k in range(self.n_peaks[key])] for key in keys_list}
+            # convert a list of a list of guesses into dict format
             elif self.is_list_or_tuple(be_guess[0]):
+                self.be_guess = dict(zip(keys_list, be_guess))
                 
-        
-        
-
         for key in keys_list:
-            x = self.df_dict[key]['be']
-            y = self.df_dict[key]['cps']
+            x_key = self.df_dict[key]['be']
+            y_key = self.df_dict[key]['cps']
                 
             # set number of peaks for each dataframe
-            if isinstance(self.n_peaks,int):
-                n = self.n_peaks
-            elif isinstance(self.n_peaks,dict):
-                n = self.n_peaks[key]
+            n_peaks_key = self.n_peaks[key]
                 
-            if self.is_float_or_int(be_guess):
-                
-            if isinstance(be_guess,dict):
-                peakCenter = be_guess[key]
-            else:
-                peakCenter = be_guess
-                
-            for k in range(n):
-                peakId = "data_"+key+"_p"+str(k)+"_"
+            for peak_number in range(n_peaks_key):
+                peak_id = "data_{}_p_{}_".format(key, peak_number)
                 # basis parameters
-                params.add(peakId+"amplitude", value=(max(y)-min(y))*1.5, min=0)
-                params.add(peakId+"center", value=peakCenter[k], min=min(x), max=max(x))
+                self.params.add(peak_id+"amplitude", value=(max(y_key)-min(y_key))*1.5, min=0)
+                self.params.add(peak_id+"center", value=be_guess[key][peak_number], min=min(x_key), max=max(x_key))
                 # for pseudo-Voigt, sigma is the width of both the Gaussian and the Lorentzian component
                 # for Voigt, sigma is the width of the Gaussian component and gamma is of the Lorentzian component
-                params.add(peakId+"sigma", value=1.5, min=0, max=5)
+                self.params.add(peak_id+"sigma", value=sigma_guess, min=sigma_min, max=sigma_max, vary=sigma_vary)
                 # pseudo-Voigt-specific parameters
-                if lineshape == "pseudoVoigt":
-                    params.add(peakId+"fraction", value=0.5, min=0, max=1)
-                    params.add(peakId+"height", 
-                            expr=peakId+"amplitude/"+peakId+"sigma*((1-"+peakId+"fraction)/sqrt(pi/log(2))+1/(pi*"+peakId+"sigma))")
-                    params.add(peakId+"fwhm", expr="2*"+peakId+"sigma")
+                if lineshape == "pseudo_voigt":
+                    self.params.add(peak_id+"glmix", value=glmix_guess, min=glmix_min, max=glmix_max, vary=glmix_vary)
+                    self.params.add(peak_id+"height", 
+                            expr=peak_id+"amplitude/"+peak_id+"sigma*((1-"+peak_id+"glmix)/sqrt(pi/log(2))+1/(pi*"+peak_id+"sigma))")
+                    self.params.add(peak_id+"fwhm", expr="2*"+peak_id+"sigma")
                 # Voigt-specific parameters
                 elif lineshape == "voigt":
-                    params.add(peakId+"gamma", value=1.5, min=0, max=5)
-                    params.add(peakId+"gfwhm", expr="2*"+peakId+"sigma")
-                    params.add(peakId+"lfwhm", expr="2*"+peakId+"gamma")
-                    params.add(peakId+"glmix", expr=peakId+"lfwhm/("+peakId+"lfwhm+"+peakId+"gfwhm)",
-                            min=minGlmix, max=maxGlmix)
-                    params._asteval.symtable['voigtFwhm'] = voigtFwhm
-                    params.add(peakId+"fwhm", expr="voigtFwhm("+peakId+"sigma,"+peakId+"gamma)", 
-                            min=0, max=maxFwhm)
+                    self.params.add(peak_id+"gamma", value=gamma_guess, min=gamma_min, max=gamma_max)
+                    self.params.add(peak_id+"gfwhm", expr="2*"+peak_id+"sigma")
+                    self.params.add(peak_id+"lfwhm", expr="2*"+peak_id+"gamma")
+                    self.params.add(peak_id+"glmix", expr=peak_id+"lfwhm/("+peak_id+"lfwhm+"+peak_id+"gfwhm)",
+                            min=glmix_min, max=glmix_max)
+                    self.params._asteval.symtable['calc_voigt_fwhm'] = self.calc_voigt_fwhm
+                    self.params.add(peak_id+"fwhm", expr="calc_voigt_fwhm("+peak_id+"sigma,"+peak_id+"gamma)", 
+                            min=fwhm_min, max=fwhm_max)
                 
-                for j in range(k):
-                    params.add("data_"+key+"_p"+str(k)+"_p"+str(j)+"_ratio", expr=peakId+"amplitude/data_"+key+"_p"+str(j)+"_amplitude", min=0, max=np.inf)
-                    params.add("data_"+key+"_p"+str(k)+"_p"+str(j)+"_spacing", expr=peakId+"center-data_"+key+"_p"+str(j)+"_center")
+                for i in range(peak_number):
+                    self.params.add("data_"+key+"_p"+str(peak_number)+"_p"+str(i)+"_ratio", expr=peak_id+"amplitude/data_"+key+"_p"+str(i)+"_amplitude", min=0, max=np.inf)
+                    # setting min=0 ensures subsequent peaks increase in binding energy
+                    self.params.add("data_"+key+"_p"+str(peak_number)+"_p"+str(i)+"_spacing", expr=peak_id+"center-data_"+key+"_p"+str(i)+"_center", min=0)
                 
-                # if k > 0 and (k < nmin):
-                if k > 0:
-                    if constrainGL == "within" and (lineshape == "pseudoVoigt"):
-                        params.add(peakId+"fraction", expr="data_"+key+"_p0_fraction")
-                    if uniformSigma == "within":
-                        params.add(peakId+"sigma", expr="data_"+key+"_p0_sigma")
+                if peak_number > 0:
+                    if match_glmix == "within" and (lineshape == "pseudo_voigt"):
+                        self.params.add(peak_id+"glmix", expr="data_"+key+"_p0_glmix")
+                    if match_sigma == "within":
+                        self.params.add(peak_id+"sigma", expr="data_"+key+"_p0_sigma")
+                    if match_gamma == "within":
+                        self.params.add(peak_id+"gamma", expr="data_"+key+"_p0_gamma")
                 
-                if ((k > 0) or (key != dataKeys[0])) and (k < nmin):
-                    if ((constrainGL == "all") or (constrainGL == True)) and (lineshape == "pseudoVoigt"):
-                        params.add(peakId+"fraction", expr="data_"+dataKeys[0]+"_p0_fraction")
-                    if constrainFwhm == "all" or (uniformSigma == "all"):
-                        params.add(peakId+"sigma", expr="data_"+dataKeys[0]+"_p0_sigma")
-                if key != dataKeys[0] and (k < nmin):
+                if ((peak_number > 0) or (key != keys_list[0])):
+                    if lineshape == "pseudo_voigt": 
+                        if ((match_glmix == "all") or (match_glmix == True)):
+                            self.params.add(peak_id+"glmix", expr="data_"+keys_list[0]+"_p0_glmix")
+                        if (match_fwhm == "all" or match_fwhm == True):
+                            self.params.add(peak_id+"sigma", expr="data_"+keys_list[0]+"_p0_sigma")
+                            
+                    if (match_sigma == "all" or match_sigma == True):
+                        self.params.add(peak_id+"sigma", expr="data_"+keys_list[0]+"_p0_sigma")
+                    if (match_gamma == "all" or match_gamma == True):
+                        self.params.add(peak_id+"gamma", expr="data_"+keys_list[0]+"_p0_gamma")
+                        
+                if key != keys_list[0]:
                     # constrain peak positions across different spectra?
                     # constrain all
-                    if alignPeaks == "all" or (alignPeaks == True):
-                        params.add(peakId+"center", expr="data_"+dataKeys[0]+"_p"+str(k)+"_center")
+                    if align_peaks == "all" or (align_peaks == True):
+                        self.params.add(peak_id+"center", expr="data_"+keys_list[0]+"_p"+str(peak_number)+"_center")
                     # constrain only peaks specified in list
-                    elif isinstance(alignPeaks, list) or isinstance(alignPeaks, tuple):
-                        if k == alignPeaks[k]:
-                            params.add(peakId+"center", expr="data_"+dataKeys[0]+"_p"+str(k)+"_center")
-                    if constrainFwhm == "align":
-                        params.add(peakId+"sigma", expr="data_"+dataKeys[0]+"_p"+str(k)+"_sigma")
-                    if constrainGL == "align" and (lineshape == "pseudoVoigt"):
-                        params.add(peakId+"fraction", expr="data_"+dataKeys[0]+"_p"+str(k)+"_fraction")
+                    elif isinstance(align_peaks, list) or isinstance(align_peaks, tuple):
+                        if peak_number == align_peaks[peak_number]:
+                            self.params.add(peak_id+"center", expr="data_"+keys_list[0]+"_p"+str(peak_number)+"_center")
+                    if lineshape == "pseudo_voigt":
+                        if match_fwhm == "align":
+                            self.params.add(peak_id+"sigma", expr="data_"+keys_list[0]+"_p"+str(peak_number)+"_sigma")
+                        if match_glmix == "align":
+                            self.params.add(peak_id+"glmix", expr="data_"+keys_list[0]+"_p"+str(peak_number)+"_glmix")
                         
             # syntax: (i,j,k) where i = ID of peak 1, j = ID of peak 2, and k = value where i > j
-            if constrainPeakRatios != False and (isinstance(constrainPeakRatios, list) or isinstance(constrainPeakRatios, tuple)):
+            if peak_ratios != False and (isinstance(peak_ratios, list) or isinstance(peak_ratios, tuple)):
                 dataKey = "data_"+key+"_"
-                if isinstance(constrainPeakRatios[0], int):
-                    peakRatios = [constrainPeakRatios]
+                if isinstance(peak_ratios[0], int):
+                    peakRatios = [peak_ratios]
                     
-                for i in range(len(constrainPeakRatios)):
-                    peakRatios = constrainPeakRatios[i]
+                for i in range(len(peak_ratios)):
+                    peakRatios = peak_ratios[i]
                         
                     peak1 = "p"+str(max(peakRatios[0:2]))
                     peak2 = "p"+str(min(peakRatios[0:2]))
@@ -305,22 +323,22 @@ class Pes:
                     #     if k == 0:
                     #         params.add(dataKey+peak1+"_"+peak2+"_ratio")
                     #     else:
-                    #         params.add(dataKey+peak1+"_"+peak2+"_ratio", expr="data_"+dataKeys[0]+"_"+peak1+"_"+peak2+"_ratio")
+                    #         params.add(dataKey+peak1+"_"+peak2+"_ratio", expr="data_"+keys_list[0]+"_"+peak1+"_"+peak2+"_ratio")
                     # else:
                     if peakRatios[2] == "align":
-                        if key == dataKeys[0]:
-                            params.add(dataKey+peak1+"_"+peak2+"_ratio")
+                        if key == keys_list[0]:
+                            self.params.add(dataKey+peak1+"_"+peak2+"_ratio")
                         else:
-                            params.add(dataKey+peak1+"_"+peak2+"_ratio", expr="data_"+dataKeys[0]+"_"+peak1+"_"+peak2+"_ratio")
+                            self.params.add(dataKey+peak1+"_"+peak2+"_ratio", expr="data_"+keys_list[0]+"_"+peak1+"_"+peak2+"_ratio")
                     else:
-                        params.add(dataKey+peak1+"_"+peak2+"_ratio", value=peakRatios[2])
-                        params[dataKey+peak1+"_"+peak2+"_ratio"].vary = False
-                    params.add(dataKey+peak1+"_amplitude", expr=dataKey+peak2+"_amplitude*"+dataKey+peak1+"_"+peak2+"_ratio")
+                        self.params.add(dataKey+peak1+"_"+peak2+"_ratio", value=peakRatios[2])
+                        self.params[dataKey+peak1+"_"+peak2+"_ratio"].vary = False
+                    self.params.add(dataKey+peak1+"_amplitude", expr=dataKey+peak2+"_amplitude*"+dataKey+peak1+"_"+peak2+"_ratio")
                 
-            if constrainPeakSpacings != False and (isinstance(constrainPeakSpacings, list) or isinstance(constrainPeakSpacings, tuple)):
+            if peak_spacings != False and (isinstance(peak_spacings, list) or isinstance(peak_spacings, tuple)):
                 # for i in range(len(constrainPeakSpacings)):
                 #     peakSpacings = constrainPeakSpacings[i]
-                for peakSpacings in constrainPeakSpacings:
+                for peakSpacings in peak_spacings:
                     # print(peakSpacings)
                         
                     peak1 = "p"+str(max(peakSpacings[0:2]))
@@ -332,55 +350,45 @@ class Pes:
                             print(peak1,peak2)
                             break
                     
-                    params.add(dataKey+peak1+"_"+peak2+"_spacing", value=peakSpacings[2])
+                    self.params.add(dataKey+peak1+"_"+peak2+"_spacing", value=peakSpacings[2])
                     if len(peakSpacings) > 3:
-                        params[dataKey+peak1+"_"+peak2+"_spacing"].min = peakSpacings[3]
-                        params[dataKey+peak1+"_"+peak2+"_spacing"].max = peakSpacings[4]
-                        params[dataKey+peak1+"_"+peak2+"_spacing"].vary = True
+                        self.params[dataKey+peak1+"_"+peak2+"_spacing"].min = peakSpacings[3]
+                        self.params[dataKey+peak1+"_"+peak2+"_spacing"].max = peakSpacings[4]
+                        self.params[dataKey+peak1+"_"+peak2+"_spacing"].vary = True
                     elif len(peakSpacings) == 3:
-                        params[dataKey+peak1+"_"+peak2+"_spacing"].vary = False
-                    params.add(dataKey+peak1+"_center", expr=dataKey+peak2+"_center+"+dataKey+peak1+"_"+peak2+"_spacing")
+                        self.params[dataKey+peak1+"_"+peak2+"_spacing"].vary = False
+                    self.params.add(dataKey+peak1+"_center", expr=dataKey+peak2+"_center+"+dataKey+peak1+"_"+peak2+"_spacing")
                     # print(params[dataKey+peak1+"_center"])
                     
-        
-        # unpack additional user-specified constraints, if any
-        if constraints != False and isinstance(constraints, dict):
-            for key in list(constraints.keys()):
-                # if only constraint value is specified, default behavior is to fix parameter value
-                if isinstance(constraints[key], float) or isinstance(constraints[key], int):
-                    params[key].value = constraints[key]
-                    params[key].vary = False
-                # elif isinstance(constraints[key], list) or isinstance(constraints[key], tuple):
-                #     params.set(value=constraints[key][0])
-                #     params[key].vary = constraints[key][1]
-                    
         # unpack user-specified expression-based constraints
-        if exprConstraints != False and isinstance(exprConstraints, dict):
-            for key in list(exprConstraints.keys()):
-                if isinstance(exprConstraints[key], str):
-                    params.add(key, expr=exprConstraints[key])
-                # elif isinstance(exprConstraints[key], list) or isinstance(exprConstraints[key], tuple):
-                    # if len(exprConstraints[key]) == 3:
-                    #     params.add(key, expr=exprConstraints[key][0], min=exprConstraints[key][1], max=exprConstraints[key][2])
-                    # elif len(exprConstraints[key]) == 2:
-                    #     params.add(key, min=exprConstraints[key][0], max=exprConstraints[key][1])
-                elif isinstance(exprConstraints[key], dict):
-                    params.add(key, **exprConstraints[key])
+        if expr_constraints != False and isinstance(expr_constraints, dict):
+            for key in list(expr_constraints.keys()):
+                if isinstance(expr_constraints[key], str):
+                    self.params.add(key, expr=expr_constraints[key])
+                elif isinstance(expr_constraints[key], dict):
+                    self.params.add(key, **expr_constraints[key])
             
         # print(params)
-        return params
+        return self.params
+    
+    def set_n_peaks(self, n_peaks):
+        '''
+        Ensures n_peaks is a dict.
+        '''
+        if isinstance(n_peaks, dict):
+            self.n_peaks = n_peaks
+            # TODO add check to ensure dict keys match
+        # generate dict from list/tuple
+        elif self.is_list_or_tuple(n_peaks):
+            self.n_peaks = dict(zip(self.keys_list, n_peaks))
+        # generate dict from float/int
+        elif self.is_float_or_int(self.n_peaks):
+            self.n_peaks = dict(zip(self.keys_list, [n_peaks for _ in range(self.keys_list)]))
     
     def generate_model_single_spectrum_no_bg(self, key, x, model=0, lineshape="voigt"):
         self.model = model
-        if isinstance(self.n_peaks, dict):
-            n_peaks = self.n_peaks[key]
-        elif self.is_list_or_tuple(n_peaks):
-            # TODO get index in df_dict from key
-            pass
-        elif self.is_float_or_int(self.n_peaks):
-            n_peaks = self.n_peaks
         for k in range(n_peaks):
-            peak_id = "data_"+key+"_p"+str(k)+"_"
+            peak_id = "data_{}_p_{}_".format(key, k)
             
             if isinstance(lineshape, str):
                 lineshape_k = lineshape
@@ -395,7 +403,7 @@ class Pes:
                                     self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
             elif lineshape_k == "pseudo_voigt":
                 self.model += self.pseudo_voigt(x, self.params[peak_id+"amplitude"],
-                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"fraction"])
+                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"glmix"])
             elif lineshape_k == "voigt":
                 self.model += self.voigt(x, self.params[peak_id+"amplitude"],
                                     self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
