@@ -204,19 +204,29 @@ class Pes:
                 elif self.background == 'linear':
                     pass
                 self.df_dict[key]['cps_no_bg'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
+                
         self.result = minimize(self.residual, self.params)
+        
+        start_index = 0
         for key in self.keys_list:
             df_key = self.df_dict[key]
             x_key = np.array(df_key['be'])
-            df_key['fit'] = self.generate_model_single_spectrum_no_bg(self.result.params, key, x_key)
+            df_key['fit_no_bg'] = self.generate_model_single_spectrum_no_bg(self.result.params, key, x_key)
+            df_key['fit'] = df_key['fit_no_bg'] + df_key['bg']
             # TODO implement lineshapes other than voigt
             for peak_number in range(self.n_peaks[key]):
                 peak_id = "data_{}_p{}_".format(key, peak_number)
-                df_key['p{}'.format(peak_number)] = self.voigt(x_key, 
-                                                               self.result.params[peak_id+'amplitude'].value,
-                                                               self.result.params[peak_id+'center'].value,
-                                                               self.result.params[peak_id+'sigma'].value,
-                                                               self.result.params[peak_id+'gamma'].value)
+                df_key['p{}_no_bg'.format(peak_number)] = self.voigt(x_key, 
+                                                                    self.result.params[peak_id+'amplitude'].value,
+                                                                    self.result.params[peak_id+'center'].value,
+                                                                    self.result.params[peak_id+'sigma'].value,
+                                                                    self.result.params[peak_id+'gamma'].value)
+                df_key['p{}'.format(peak_number)] = df_key['p{}_no_bg'.format(peak_number)] + df_key['bg']
+            # slice and store residuals
+            end_index = start_index + len(df_key)
+            df_key['residuals'] = self.result.residual[start_index:end_index]
+            df_key['std_residuals'] = df_key['residuals']/np.std(df_key['residuals'])
+            start_index = np.copy(end_index)
     
     def residual(self, params, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
         residuals = np.array([])
@@ -467,97 +477,62 @@ class Pes:
     # TODO make display_residuals flag functional
     # TODO implement normalization after bg subtraction
     def plot_result(self, 
-                    lineshape="voigt", subtract_bg=True, normalize=True, display_bg=False,
-                    display_residuals=True, text=None,
+                    subtract_bg=True, normalize=True,
+                    display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
+                    text=None,
                     tight_layout=True,
                     colors=colors, component_z_spec=False, xdim=3.25*4/3, ydim=3.25, energy_axis='be',
-                    save_fig=False, ypad=0, **kwargs):
+                    save_fig=False, ypad=0, ax_kwargs=None, **kwargs):
         
         j = 0
-        for key in list(self.df_dict.keys()):
+        for key in self.keys_list:
             # use gridspec to combine main and residual plots
             fig = plt.figure()
             gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
-            ax, residual_axis = gs.subplots(sharex=True,sharey=False)
-            df_key = self.df_dict[key]
-            x_key = np.array(self.df_dict[key]['be'])
-            y_key = np.copy(np.array(self.df_dict[key]['cps']))
+            ax, residual_ax = gs.subplots(sharex=True,sharey=False)
+            df_key = self.df_dict[key]            
             
             if subtract_bg:
-                cps_axis = 'cps_no_bg'
+                bg_suffix = '_no_bg'
             else:
-                cps_axis = 'cps'
-                
+                bg_suffix = ''
+            
+            sns.scatterplot(data=df_key, x=energy_axis, y='cps'+bg_suffix, ax=ax)
+            
             if display_bg and (not subtract_bg):
                 sns.lineplot(data=df_key, x=energy_axis, y='bg', ax=ax)
                 
-            sns.scatterplot(data=df_key, x=energy_axis, y=cps_axis, ax=ax)
+            if display_envelope:
+                sns.lineplot(data=df_key, x=energy_axis, y='fit'+bg_suffix, ax=ax)
             
-            if self.background == False and bgdata != False:
-                y_fit = self.generate_model_single_spectrum(self.result.params, key, x_key, y_key-y_bg, n, self.background, lineshape=lineshape)
-            else:
-                y_fit = self.generate_model_single_spectrum(self.result.params, key, x_key, y_key, n, self.background, lineshape=lineshape)
+            if display_components:
+                for peak_number in range(self.n_peaks[key]):
+                    sns.lineplot(data=df_key, x=energy_axis, y='p{}'.format(peak_number)+bg_suffix, ax=ax)
 
-            markerz=0
-            envelopez=1
-            if isinstance(normalize, int) and (normalize != False):
-                y0 = self.result.params["data_"+key+"_p"+str(normalize)+"_height"]
-                ax.plot(x_key,(y_key-y_bg)/y0, marker=cls.marker, c='k', alpha=self.marker_alpha, zorder=markerz, ms=self.marker_size, mew=self.marker_edge_width, linestyle="None")
-                ax.plot(x_key,(y_fit-y_bg)/y0, 'k-', linewidth=envelopelinewidth, zorder=envelopez, linestyle="None")
-                ymax = 1
-                ymin = 0
-            else:
-                ax.plot(x_key,y_key-y_bg, marker=cls.marker, c='k', alpha=self.marker_alpha, zorder=markerz, ms=self.marker_size,  mew=self.marker_edge_width, linestyle="None")
-                ymax = max(y_key-y_bg)
-                ymin = min(y_key-y_bg)
-                if self.background == False and bgdata != False:
-                    # without simultaneous background fitting, y_fit generated by fullModel() does not contain background
-                    ax.plot(x_key,y_fit, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
-                else:
-                    # if plotting y_fit with simultaneous background fitting, need to subtract off background
-                    ax.plot(x_key,y_fit-y_bg, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
-            # plt.plot(x,y_fit)
-            if component_z_spec == False:
-                component_z_spec = [1+k for k in range(n)]
-            for k in range(n):
-                peakId = "data_"+key+"_p"+str(k)+"_"
-                # print(peakId)
-                if lineshape == "pseudoVoigt":
-                    y_comp = pseudoVoigt(x_key, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
-                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"fraction"].value)
-                elif lineshape == "voigt":
-                    y_comp = voigt(x_key, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
-                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"gamma"].value)
-                if isinstance(normalize, int) and (normalize != False):
-                    ax.plot(x_key,y_comp/y0, color=colors[k], linewidth=linewidth)
-                else:
-                    ax.plot(x_key,y_comp, color=colors[k], linewidth=linewidth, zorder=component_z_spec[k])
-            # plotOpts(fig, ax, 
-            #      fontsize, xlim, ylim, xticks, yticks, minorTickMultiple, xdim, ydim,
-            #      tight_layout=tight_layout)
-            axOpts(ax,xlim,ylim,xticks,False,minorTickMultiple)
-            if ypad != False or (ypad != 0):
-                ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
-            ax.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
-            ax.set_ylabel("Intensity", fontsize=fontsize)
-            ax.tick_params(axis='both', which='major', labelsize=fontsize)
-            if text != False:
-                ax.text(0.85,0.85,text[j],fontsize=fontsize,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
+            if not isinstance(ax_kwargs, dict):
+                ax_kwargs = {}
+            self.ax_opts(ax, **ax_kwargs)
+            # if ypad != False or (ypad != 0):
+            #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
+            
+            if energy_axis == 'be':
+                ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+            elif energy_axis == 'ke':
+                ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
+            ax.set_ylabel("Intensity", fontsize=self.label_font_size)
+            ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            if text != None:
+                ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
             if tight_layout:
                 plt.tight_layout()
             j += 1
             
-            residuals = y_key - y_fit
-            if self.background == False and bgdata != False:
-                residuals += -y_bg
-            residual_axis.plot(x_key,residuals/np.std(residuals), ms=self.marker_size/2, c="k", alpha=self.marker_alpha, marker=cls.residual_marker, mew=self.marker_edge_width, linestyle="None")
-            residual_axis.axhline(y=0, color='k', linestyle='--', linewidth=envelopelinewidth)
-            residual_axis.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
-            residual_axis.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=fontsize)
-            residual_axis.tick_params(axis='both', which='major', labelsize=fontsize)
-            self.ax_opts(residual_axis,xlim,(-3,3),xticks,False,minorTickMultiple, **kwargs)
+            sns.scatterplot(data=df_key, x=energy_axis, y='std_residuals', ax=residual_ax)
+            residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+            residual_ax.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=self.label_font_size)
+            residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            self.ax_opts(residual_ax, **ax_kwargs)
             ax.invert_xaxis()
-            self.figOpts(fig, fontsize, xdim, ydim)
             if tight_layout:
                 plt.tight_layout()
 
