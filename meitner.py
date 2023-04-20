@@ -180,6 +180,19 @@ class Pes:
     def linear(x, slope, intercept):
         return slope*x + intercept
     
+    def residual(self, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
+        self.residuals = np.array([])
+        if keys_list == None:
+            keys_list = self.keys_list
+        for key in keys_list:
+            x_key = np.copy(self.df_dict[key]['be'])
+            y_key = np.copy(self.df_dict[key]['cps'])
+            # if background was fitted separately, subtract it manually before computing residuals
+            if isinstance(bgdata, dict):
+                y_key += -bgdata[key]
+            resid = (y_key - self.generate_model_single_spectrum_no_bg(self.params, key, x_key, y_key, self.n_peaks[key], self.background, lineshape=lineshape, *args, **kwargs))/(len(x_key)*np.linalg.norm(x_key))
+        self.residuals = np.append(self.residuals, resid)
+    
     def generate_params(self, be_guess, keys_list=None,
                         # general parameters
                         lineshape="voigt",
@@ -204,16 +217,16 @@ class Pes:
         
         if keys_list == None:
             keys_list = self.keys_list
-            
-        len_keys_list = len(keys_list)
         
         self.params = Parameters()
         
         # each entry in be_guess_dict contains a list of guess positions for each region
         # preferred input
         if isinstance(be_guess, dict):
+            self.be_guess = be_guess
+            # ! no need to subset because of how dicts work
             # subset
-            self.be_guess = {key: be_guess[key] for key in keys_list}
+            # self.be_guess = {key: be_guess[key] for key in keys_list}
             # TODO add check to ensure dict keys match
         # convert a single-valued input into expected dict format
         elif self.is_float_or_int(be_guess):
@@ -227,8 +240,8 @@ class Pes:
                 self.be_guess = dict(zip(keys_list, be_guess))
                 
         for key in keys_list:
-            x_key = self.df_dict[key]['be']
-            y_key = self.df_dict[key]['cps']
+            x_key = np.copy(self.df_dict[key]['be'])
+            y_key = np.copy(self.df_dict[key]['cps'])
                 
             # set number of peaks for each dataframe
             n_peaks_key = self.n_peaks[key]
@@ -408,3 +421,47 @@ class Pes:
                 self.model += self.voigt(x, self.params[peak_id+"amplitude"],
                                     self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
 
+    # stolen from PyARPES
+    @staticmethod
+    def calculate_shirley_background(
+        xps: np.ndarray, eps=1e-7, max_iters=50, n_samples=(5,5)
+    ) -> np.ndarray:
+        """Core routine for calculating a Shirley background on np.ndarray data."""
+        background = np.copy(xps)
+        cumulative_xps = np.cumsum(xps, axis=0)
+        total_xps = np.sum(xps, axis=0)
+
+        rel_error = np.inf
+
+        i_left = np.mean(xps[:n_samples[0]], axis=0)
+        i_right = np.mean(xps[-n_samples[1]:], axis=0)
+
+        iter_count = 0
+
+        k = i_left - i_right
+        for iter_count in range(max_iters):
+            cumulative_background = np.cumsum(background, axis=0)
+            total_background = np.sum(background, axis=0)
+
+            new_bkg = np.copy(background)
+
+            for i in range(len(new_bkg)):
+                new_bkg[i] = i_right + k * (
+                    (total_xps - cumulative_xps[i] - (total_background - cumulative_background[i]))
+                    / (total_xps - total_background + 1e-5)
+                )
+
+            rel_error = np.abs(np.sum(new_bkg, axis=0) - total_background) / (total_background)
+
+            background = new_bkg
+
+            if np.any(rel_error < eps):
+                break
+
+        if (iter_count + 1) == max_iters:
+            warnings.warn(
+                "Shirley background calculation did not converge "
+                + "after {} steps with relative error {}!".format(max_iters, rel_error)
+            )
+            
+        return background
