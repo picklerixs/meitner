@@ -6,7 +6,7 @@ import warnings
 
 from vamas import Vamas
 from scipy.special import wofz
-from lmfit import Parameters
+from lmfit import minimize, Parameters
 
 
 class Pes:
@@ -180,18 +180,28 @@ class Pes:
     def linear(x, slope, intercept):
         return slope*x + intercept
     
-    def residual(self, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
-        self.residuals = np.array([])
-        if keys_list == None:
-            keys_list = self.keys_list
-        for key in keys_list:
-            x_key = np.copy(self.df_dict[key]['be'])
-            y_key = np.copy(self.df_dict[key]['cps'])
+    def fit_data(self, lineshape="voigt", bgdata=None, **kwargs):
+        if bgdata == None:
+            for key in self.keys_list:
+                self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **kwargs)
+        self.result = minimize(self.residual, self.params)
+    
+    def residual(self, params, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
+        residuals = np.array([])
+        # if keys_list == None:
+        #     keys_list = self.keys_list
+        for key in self.keys_list:
+            # print(keys_list)
+            # TODO figure out why keys_list gets turned into Parameters object..
+            x_key = np.array(self.df_dict[key]['be'])
+            y_key = np.array(self.df_dict[key]['cps'])
             # if background was fitted separately, subtract it manually before computing residuals
-            if isinstance(bgdata, dict):
-                y_key += -bgdata[key]
-            resid = (y_key - self.generate_model_single_spectrum_no_bg(self.params, key, x_key, y_key, self.n_peaks[key], self.background, lineshape=lineshape, *args, **kwargs))/(len(x_key)*np.linalg.norm(x_key))
-        self.residuals = np.append(self.residuals, resid)
+            # if isinstance(bgdata, dict):
+            #     y_key += -bgdata[key]
+            y_key += -np.array(self.df_dict[key]['cps'])
+            resid = (y_key - self.generate_model_single_spectrum_no_bg(params, key, x_key, **kwargs))/(len(x_key)*np.linalg.norm(x_key))
+            residuals = np.append(residuals, resid)
+        return residuals
     
     def generate_params(self, be_guess, keys_list=None,
                         # general parameters
@@ -240,8 +250,8 @@ class Pes:
                 self.be_guess = dict(zip(keys_list, be_guess))
                 
         for key in keys_list:
-            x_key = np.copy(self.df_dict[key]['be'])
-            y_key = np.copy(self.df_dict[key]['cps'])
+            x_key = np.array(self.df_dict[key]['be'])
+            y_key = np.array(self.df_dict[key]['cps'])
                 
             # set number of peaks for each dataframe
             n_peaks_key = self.n_peaks[key]
@@ -398,10 +408,10 @@ class Pes:
         elif self.is_float_or_int(n_peaks):
             self.n_peaks = dict(zip(self.keys_list, [n_peaks for _ in range(len(self.keys_list))]))
     
-    def generate_model_single_spectrum_no_bg(self, key, x, model=0, lineshape="voigt"):
-        self.model = model
+    def generate_model_single_spectrum_no_bg(self, params, key, x, model=0, lineshape="voigt"):
+        model = 0
         for k in range(self.n_peaks[key]):
-            peak_id = "data_{}_p_{}_".format(key, k)
+            peak_id = "data_{}_p{}_".format(key, k)
             
             if isinstance(lineshape, str):
                 lineshape_k = lineshape
@@ -409,17 +419,141 @@ class Pes:
                 lineshape_k = lineshape[k]
                 
             if lineshape_k == "gaussian":
-                self.model += self.gaussian(x, self.params[peak_id+"amplitude"],
-                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
+                model += self.gaussian(x, params[peak_id+"amplitude"],
+                                    params[peak_id+"center"],params[peak_id+"sigma"],params[peak_id+"gamma"])
             elif lineshape_k == "lorentzian":
-                self.model += self.lorentzian(x, self.params[peak_id+"amplitude"],
-                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
+                model += self.lorentzian(x, params[peak_id+"amplitude"],
+                                    params[peak_id+"center"],params[peak_id+"sigma"],params[peak_id+"gamma"])
             elif lineshape_k == "pseudo_voigt":
-                self.model += self.pseudo_voigt(x, self.params[peak_id+"amplitude"],
-                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"glmix"])
+                model += self.pseudo_voigt(x, params[peak_id+"amplitude"],
+                                    params[peak_id+"center"],params[peak_id+"sigma"],params[peak_id+"glmix"])
             elif lineshape_k == "voigt":
-                self.model += self.voigt(x, self.params[peak_id+"amplitude"],
-                                    self.params[peak_id+"center"],self.params[peak_id+"sigma"],self.params[peak_id+"gamma"])
+                model += self.voigt(x, params[peak_id+"amplitude"],
+                                    params[peak_id+"center"],params[peak_id+"sigma"],params[peak_id+"gamma"])
+        return model
+
+    def plotResult(self, 
+                lineshape="voigt", normalize=False, 
+                plotResiduals=True, text=False,
+                tight_layout=True, minorTickMultiple=1,
+                colors=colors, compzList=False, xdim=3.25, ydim=3.25, fontsize=10,
+                xlim=False,ylim=False,xticks=False,saveFig=False,ypad=0):
+        
+        # xticks = False
+        yticks = False
+        # xdim = 3.25
+        # ydim = 2
+        j = 0
+        for key in list(self.df_dict.keys()):
+            # fig, ax = plt.subplots()
+            fig = plt.figure()
+            gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
+            ax, axResiduals = gs.subplots(sharex=True,sharey=False)
+            x =  self.df_dict[key][0,:]
+            y =  self.df_dict[key][1,:]
+            
+            # xlim = (min(x)-0.1,max(x)+0.1)
+            # ylim = (min(y)-1000000,max(y)+1000000)
+            # xlim = False
+            # ylim = False
+            
+            if isinstance(self.n_peaks,int):
+                n = self.n_peaks
+                nmin = 0
+            elif isinstance(self.n_peaks,dict):
+                n = self.n_peaks[key]
+                nmin = self.n_peaks[min(self.n_peaks, key=self.n_peaks.get)]
+            
+            if self.background == "linear":
+                y_bg = linear(x, self.result.params["data_"+key+"_bg_slope"], self.result.params["data_"+key+"_bg_intercept"])
+            elif self.background == "shirley":
+                y_bg = shirleyIterative(y, self.result.params["data_"+key+"_bg_k"], 10, 100, 1e-8)
+            elif self.background == False and bgdata != False:
+                y_bg = bgdata[key]
+            
+            if self.background == False and bgdata != False:
+                y_fit = fullModel(self.result.params, key, x, y-y_bg, n, self.background, lineshape=lineshape)
+            else:
+                y_fit = fullModel(self.result.params, key, x, y, n, self.background, lineshape=lineshape)
+
+            
+            marker = "+"
+            markerResiduals = marker
+            alpha = 0.5
+            size = 5
+            markeredgewidth = 2/3
+            markerz=0
+            envelopez=1
+            if isinstance(normalize, int) and (normalize != False):
+                y0 = self.result.params["data_"+key+"_p"+str(normalize)+"_height"]
+                ax.plot(x,(y-y_bg)/y0, marker=marker, c='k', alpha=alpha, zorder=markerz, ms=size, mew=markeredgewidth, linestyle="None")
+                ax.plot(x,(y_fit-y_bg)/y0, 'k-', linewidth=envelopelinewidth, zorder=envelopez, linestyle="None")
+                ymax = 1
+                ymin = 0
+            else:
+                ax.plot(x,y-y_bg, marker=marker, c='k', alpha=alpha, zorder=markerz, ms=size,  mew=markeredgewidth, linestyle="None")
+                ymax = max(y-y_bg)
+                ymin = min(y-y_bg)
+                if self.background == False and bgdata != False:
+                    # without simultaneous background fitting, y_fit generated by fullModel() does not contain background
+                    ax.plot(x,y_fit, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
+                else:
+                    # if plotting y_fit with simultaneous background fitting, need to subtract off background
+                    ax.plot(x,y_fit-y_bg, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
+            # plt.plot(x,y_fit)
+            if compzList == False:
+                compzList = [1+k for k in range(n)]
+            for k in range(n):
+                peakId = "data_"+key+"_p"+str(k)+"_"
+                # print(peakId)
+                if lineshape == "pseudoVoigt":
+                    y_comp = pseudoVoigt(x, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
+                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"fraction"].value)
+                elif lineshape == "voigt":
+                    y_comp = voigt(x, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
+                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"gamma"].value)
+                if isinstance(normalize, int) and (normalize != False):
+                    ax.plot(x,y_comp/y0, color=colors[k], linewidth=linewidth)
+                else:
+                    ax.plot(x,y_comp, color=colors[k], linewidth=linewidth, zorder=compzList[k])
+            # plotOpts(fig, ax, 
+            #      fontsize, xlim, ylim, xticks, yticks, minorTickMultiple, xdim, ydim,
+            #      tight_layout=tight_layout)
+            axOpts(ax,xlim,ylim,xticks,False,minorTickMultiple)
+            if ypad != False or (ypad != 0):
+                ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
+            ax.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
+            ax.set_ylabel("Intensity", fontsize=fontsize)
+            ax.tick_params(axis='both', which='major', labelsize=fontsize)
+            if text != False:
+                ax.text(0.85,0.85,text[j],fontsize=fontsize,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
+            if tight_layout:
+                plt.tight_layout()
+            j += 1
+            
+            # figResiduals, axResiduals = plt.subplots()
+            residuals = y - y_fit
+            if self.background == False and bgdata != False:
+                residuals += -y_bg
+            axResiduals.plot(x,residuals/np.std(residuals), ms=size/2, c="k", alpha=alpha, marker=markerResiduals, mew=markeredgewidth, linestyle="None")
+            axResiduals.axhline(y=0, color='k', linestyle='--', linewidth=envelopelinewidth)
+            axResiduals.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
+            axResiduals.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=fontsize)
+            axResiduals.tick_params(axis='both', which='major', labelsize=fontsize)
+            # plotOpts(figResiduals, axResiduals, 
+            #     fontsize, xlim, (-3,3), xticks, False, minorTickMultiple, xdim, max((ydim/3,1)),
+            #     tight_layout=tight_layout)
+            axOpts(axResiduals,xlim,(-3,3),xticks,False,minorTickMultiple)
+            ax.invert_xaxis()
+            figOpts(fig, fontsize, xdim, ydim)
+            if tight_layout:
+                plt.tight_layout()
+
+            print(saveFig)
+            if isinstance(saveFig,dict):
+                fig.savefig(saveFig[key]+".svg")
+            if isinstance(saveFig,str):
+                fig.savefig(saveFig+".svg")
 
     # stolen from PyARPES
     @staticmethod
