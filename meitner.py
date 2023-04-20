@@ -22,6 +22,7 @@ class Pes:
         [247/255,168/255,170/255], # strawberry pink
         [240/255,79/255,82/255]] # red
     envelope_color = "#000000"
+    data_color = "#000000"
     background_color = "gray"
     
     # fitting options
@@ -475,7 +476,7 @@ class Pes:
     # TODO make component plotting work if multiple lineshapes are specified
     # TODO add stacking functionality for multiple spectra
     # TODO make display_residuals flag functional
-    # TODO implement normalization after bg subtraction
+    # TODO implement normalization after bg subtraction (not necessary?)
     def plot_result(self, 
                     subtract_bg=True, normalize=True,
                     display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
@@ -497,17 +498,24 @@ class Pes:
             else:
                 bg_suffix = ''
             
-            sns.scatterplot(data=df_key, x=energy_axis, y='cps'+bg_suffix, ax=ax)
+            sns.lineplot(data=df_key, x=energy_axis, y='cps'+bg_suffix, 
+                            ax=ax, mec=self.data_color, marker=self.marker, ls='None',
+                            ms=self.marker_size, mew=self.marker_edge_width)
             
             if display_bg and (not subtract_bg):
-                sns.lineplot(data=df_key, x=energy_axis, y='bg', ax=ax)
+                sns.lineplot(data=df_key, x=energy_axis, y='bg', 
+                             ax=ax, color=self.background_color, linewidth=self.background_linewidth)
                 
             if display_envelope:
-                sns.lineplot(data=df_key, x=energy_axis, y='fit'+bg_suffix, ax=ax)
+                sns.lineplot(data=df_key, x=energy_axis, y='fit'+bg_suffix, 
+                             ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth)
             
             if display_components:
+                i = 0
                 for peak_number in range(self.n_peaks[key]):
-                    sns.lineplot(data=df_key, x=energy_axis, y='p{}'.format(peak_number)+bg_suffix, ax=ax)
+                    sns.lineplot(data=df_key, x=energy_axis, y='p{}'.format(peak_number)+bg_suffix, 
+                                 ax=ax, color=colors[i], linewidth=self.component_linewidth)
+                    i += 1
 
             if not isinstance(ax_kwargs, dict):
                 ax_kwargs = {}
@@ -527,7 +535,9 @@ class Pes:
                 plt.tight_layout()
             j += 1
             
-            sns.scatterplot(data=df_key, x=energy_axis, y='std_residuals', ax=residual_ax)
+            sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
+                            ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
+                            ms=self.marker_size, mew=self.marker_edge_width)
             residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
             residual_ax.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
@@ -575,7 +585,7 @@ class Pes:
                             # font options
                             font_family='Arial', label_font_size=12, tick_font_size=12, usetex=False,
                             # line styling options
-                            envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25,
+                            envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25, background_linewidth=1.25,
                             # marker styling options
                             marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3):
         # TODO add presents that can be overwritten if any of the individual parameters are user-specified
@@ -591,6 +601,7 @@ class Pes:
         
         cls.envelope_linewidth = envelope_linewidth
         cls.component_linewidth = component_linewidth
+        cls.background_linewidth = background_linewidth
         cls.axes_linewidth = axes_linewidth
         
         cls.marker = marker
