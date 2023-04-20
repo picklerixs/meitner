@@ -7,9 +7,22 @@ import warnings
 from vamas import Vamas
 from scipy.special import wofz
 from lmfit import minimize, Parameters
+from matplotlib import rc, rcParams
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 
 class Pes:
+    
+    colors = [[98/255,146/255,190/255], # mid-blue
+        [64/255,105/255,149/255], # dark blue
+        [133/255,127/255,188/255], # sour purple
+        [66/255,69/255,133/255], # dark purple
+        [250/255,172/255,116/255], # light orange
+        [194/255,104/255,47/255], # burnt orange
+        [247/255,168/255,170/255], # strawberry pink
+        [240/255,79/255,82/255]] # red
+    envelope_color = "#000000"
+    background_color = "gray"
     
     # fitting options
     background = 'shirley'
@@ -21,6 +34,7 @@ class Pes:
         self.df_dict = df_dict
         self.keys_list = list(df_dict.keys())
         self.set_n_peaks(n_peaks)
+        self.set_class_plot_config()
         
     def plot_survey(self, keys_list=None, **kwargs):
         if keys_list == None:
@@ -183,8 +197,24 @@ class Pes:
     def fit_data(self, lineshape="voigt", bgdata=None, **kwargs):
         if bgdata == None:
             for key in self.keys_list:
-                self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **kwargs)
+                # TODO integrate generation of bg column into background function itself?
+                # TODO implement linear bg
+                if self.background == 'shirley':
+                    self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **kwargs)
+                elif self.background == 'linear':
+                    pass
+                self.df_dict[key]['cps_bg_subtracted'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
         self.result = minimize(self.residual, self.params)
+        for key in self.keys_list:
+            df_key = self.df_dict[key]
+            # TODO implement lineshapes other than voigt
+            for peak_number in range(self.n_peaks[key]):
+                peak_id = "data_{}_p{}_".format(key, peak_number)
+                df_key['p{}'.format(peak_number)] = self.voigt(np.array(df_key['be']), 
+                                                               self.result.params[peak_id+'amplitude'].value,
+                                                               self.result.params[peak_id+'center'].value,
+                                                               self.result.params[peak_id+'sigma'].value,
+                                                               self.result.params[peak_id+'gamma'].value)
     
     def residual(self, params, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
         residuals = np.array([])
@@ -194,11 +224,8 @@ class Pes:
             # print(keys_list)
             # TODO figure out why keys_list gets turned into Parameters object..
             x_key = np.array(self.df_dict[key]['be'])
-            y_key = np.array(self.df_dict[key]['cps'])
-            # if background was fitted separately, subtract it manually before computing residuals
-            # if isinstance(bgdata, dict):
-            #     y_key += -bgdata[key]
-            y_key += -np.array(self.df_dict[key]['cps'])
+            y_key = np.array(self.df_dict[key]['cps_bg_subtracted'])
+
             resid = (y_key - self.generate_model_single_spectrum_no_bg(params, key, x_key, **kwargs))/(len(x_key)*np.linalg.norm(x_key))
             residuals = np.append(residuals, resid)
         return residuals
@@ -432,130 +459,174 @@ class Pes:
                                     params[peak_id+"center"],params[peak_id+"sigma"],params[peak_id+"gamma"])
         return model
 
-    def plotResult(self, 
-                lineshape="voigt", normalize=False, 
-                plotResiduals=True, text=False,
-                tight_layout=True, minorTickMultiple=1,
-                colors=colors, compzList=False, xdim=3.25, ydim=3.25, fontsize=10,
-                xlim=False,ylim=False,xticks=False,saveFig=False,ypad=0):
+    # TODO make lineshape spec a class variable
+    # TODO make component plotting work if multiple lineshapes are specified
+    # TODO add stacking functionality for multiple spectra
+    # TODO make display_residuals flag functional
+    # def plot_result(self, 
+    #                 lineshape="voigt", subtract_bg=True, normalize=True, display_bg=False,
+    #                 display_residuals=True, text=None,
+    #                 tight_layout=True,
+    #                 colors=colors, component_z_spec=False, xdim=3.25*4/3, ydim=3.25, energy_axis='be'
+    #                 save_fig=False, ypad=0, **kwargs):
         
-        # xticks = False
-        yticks = False
-        # xdim = 3.25
-        # ydim = 2
-        j = 0
-        for key in list(self.df_dict.keys()):
-            # fig, ax = plt.subplots()
-            fig = plt.figure()
-            gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
-            ax, axResiduals = gs.subplots(sharex=True,sharey=False)
-            x =  self.df_dict[key][0,:]
-            y =  self.df_dict[key][1,:]
+    #     j = 0
+    #     for key in list(self.df_dict.keys()):
+    #         # use gridspec to combine main and residual plots
+    #         fig = plt.figure()
+    #         gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
+    #         ax, residual_axis = gs.subplots(sharex=True,sharey=False)
+    #         df_key = self.df_dict[key]
+    #         x_key = np.array(self.df_dict[key]['be'])
+    #         y_key = np.copy(np.array(self.df_dict[key]['cps']))
             
-            # xlim = (min(x)-0.1,max(x)+0.1)
-            # ylim = (min(y)-1000000,max(y)+1000000)
-            # xlim = False
-            # ylim = False
+    #         if subtract_bg:
+    #             cps_axis = 'cps_bg_subtracted'
+    #         else:
+    #             cps_axis = 'cps'
+                
+    #         if display_bg:
+    #             sns.lineplot(data=df_key, x=energy_axis, y='bg', ax=ax)
+                
+    #         sns.scatterplot(data=df_key, x=energy_axis, y=cps_axis, ax=ax)
             
-            if isinstance(self.n_peaks,int):
-                n = self.n_peaks
-                nmin = 0
-            elif isinstance(self.n_peaks,dict):
-                n = self.n_peaks[key]
-                nmin = self.n_peaks[min(self.n_peaks, key=self.n_peaks.get)]
-            
-            if self.background == "linear":
-                y_bg = linear(x, self.result.params["data_"+key+"_bg_slope"], self.result.params["data_"+key+"_bg_intercept"])
-            elif self.background == "shirley":
-                y_bg = shirleyIterative(y, self.result.params["data_"+key+"_bg_k"], 10, 100, 1e-8)
-            elif self.background == False and bgdata != False:
-                y_bg = bgdata[key]
-            
-            if self.background == False and bgdata != False:
-                y_fit = fullModel(self.result.params, key, x, y-y_bg, n, self.background, lineshape=lineshape)
-            else:
-                y_fit = fullModel(self.result.params, key, x, y, n, self.background, lineshape=lineshape)
+    #         if self.background == False and bgdata != False:
+    #             y_fit = self.generate_model_single_spectrum(self.result.params, key, x_key, y_key-y_bg, n, self.background, lineshape=lineshape)
+    #         else:
+    #             y_fit = self.generate_model_single_spectrum(self.result.params, key, x_key, y_key, n, self.background, lineshape=lineshape)
 
+    #         markerz=0
+    #         envelopez=1
+    #         if isinstance(normalize, int) and (normalize != False):
+    #             y0 = self.result.params["data_"+key+"_p"+str(normalize)+"_height"]
+    #             ax.plot(x_key,(y_key-y_bg)/y0, marker=cls.marker, c='k', alpha=self.marker_alpha, zorder=markerz, ms=self.marker_size, mew=self.marker_edge_width, linestyle="None")
+    #             ax.plot(x_key,(y_fit-y_bg)/y0, 'k-', linewidth=envelopelinewidth, zorder=envelopez, linestyle="None")
+    #             ymax = 1
+    #             ymin = 0
+    #         else:
+    #             ax.plot(x_key,y_key-y_bg, marker=cls.marker, c='k', alpha=self.marker_alpha, zorder=markerz, ms=self.marker_size,  mew=self.marker_edge_width, linestyle="None")
+    #             ymax = max(y_key-y_bg)
+    #             ymin = min(y_key-y_bg)
+    #             if self.background == False and bgdata != False:
+    #                 # without simultaneous background fitting, y_fit generated by fullModel() does not contain background
+    #                 ax.plot(x_key,y_fit, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
+    #             else:
+    #                 # if plotting y_fit with simultaneous background fitting, need to subtract off background
+    #                 ax.plot(x_key,y_fit-y_bg, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
+    #         # plt.plot(x,y_fit)
+    #         if component_z_spec == False:
+    #             component_z_spec = [1+k for k in range(n)]
+    #         for k in range(n):
+    #             peakId = "data_"+key+"_p"+str(k)+"_"
+    #             # print(peakId)
+    #             if lineshape == "pseudoVoigt":
+    #                 y_comp = pseudoVoigt(x_key, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
+    #                                     self.result.params[peakId+"sigma"].value, self.result.params[peakId+"fraction"].value)
+    #             elif lineshape == "voigt":
+    #                 y_comp = voigt(x_key, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
+    #                                     self.result.params[peakId+"sigma"].value, self.result.params[peakId+"gamma"].value)
+    #             if isinstance(normalize, int) and (normalize != False):
+    #                 ax.plot(x_key,y_comp/y0, color=colors[k], linewidth=linewidth)
+    #             else:
+    #                 ax.plot(x_key,y_comp, color=colors[k], linewidth=linewidth, zorder=component_z_spec[k])
+    #         # plotOpts(fig, ax, 
+    #         #      fontsize, xlim, ylim, xticks, yticks, minorTickMultiple, xdim, ydim,
+    #         #      tight_layout=tight_layout)
+    #         axOpts(ax,xlim,ylim,xticks,False,minorTickMultiple)
+    #         if ypad != False or (ypad != 0):
+    #             ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
+    #         ax.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
+    #         ax.set_ylabel("Intensity", fontsize=fontsize)
+    #         ax.tick_params(axis='both', which='major', labelsize=fontsize)
+    #         if text != False:
+    #             ax.text(0.85,0.85,text[j],fontsize=fontsize,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
+    #         if tight_layout:
+    #             plt.tight_layout()
+    #         j += 1
             
-            marker = "+"
-            markerResiduals = marker
-            alpha = 0.5
-            size = 5
-            markeredgewidth = 2/3
-            markerz=0
-            envelopez=1
-            if isinstance(normalize, int) and (normalize != False):
-                y0 = self.result.params["data_"+key+"_p"+str(normalize)+"_height"]
-                ax.plot(x,(y-y_bg)/y0, marker=marker, c='k', alpha=alpha, zorder=markerz, ms=size, mew=markeredgewidth, linestyle="None")
-                ax.plot(x,(y_fit-y_bg)/y0, 'k-', linewidth=envelopelinewidth, zorder=envelopez, linestyle="None")
-                ymax = 1
-                ymin = 0
-            else:
-                ax.plot(x,y-y_bg, marker=marker, c='k', alpha=alpha, zorder=markerz, ms=size,  mew=markeredgewidth, linestyle="None")
-                ymax = max(y-y_bg)
-                ymin = min(y-y_bg)
-                if self.background == False and bgdata != False:
-                    # without simultaneous background fitting, y_fit generated by fullModel() does not contain background
-                    ax.plot(x,y_fit, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
-                else:
-                    # if plotting y_fit with simultaneous background fitting, need to subtract off background
-                    ax.plot(x,y_fit-y_bg, 'k-', linewidth=envelopelinewidth, zorder=envelopez)
-            # plt.plot(x,y_fit)
-            if compzList == False:
-                compzList = [1+k for k in range(n)]
-            for k in range(n):
-                peakId = "data_"+key+"_p"+str(k)+"_"
-                # print(peakId)
-                if lineshape == "pseudoVoigt":
-                    y_comp = pseudoVoigt(x, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
-                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"fraction"].value)
-                elif lineshape == "voigt":
-                    y_comp = voigt(x, self.result.params[peakId+"amplitude"].value, self.result.params[peakId+"center"].value,
-                                        self.result.params[peakId+"sigma"].value, self.result.params[peakId+"gamma"].value)
-                if isinstance(normalize, int) and (normalize != False):
-                    ax.plot(x,y_comp/y0, color=colors[k], linewidth=linewidth)
-                else:
-                    ax.plot(x,y_comp, color=colors[k], linewidth=linewidth, zorder=compzList[k])
-            # plotOpts(fig, ax, 
-            #      fontsize, xlim, ylim, xticks, yticks, minorTickMultiple, xdim, ydim,
-            #      tight_layout=tight_layout)
-            axOpts(ax,xlim,ylim,xticks,False,minorTickMultiple)
-            if ypad != False or (ypad != 0):
-                ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
-            ax.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
-            ax.set_ylabel("Intensity", fontsize=fontsize)
-            ax.tick_params(axis='both', which='major', labelsize=fontsize)
-            if text != False:
-                ax.text(0.85,0.85,text[j],fontsize=fontsize,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
-            if tight_layout:
-                plt.tight_layout()
-            j += 1
-            
-            # figResiduals, axResiduals = plt.subplots()
-            residuals = y - y_fit
-            if self.background == False and bgdata != False:
-                residuals += -y_bg
-            axResiduals.plot(x,residuals/np.std(residuals), ms=size/2, c="k", alpha=alpha, marker=markerResiduals, mew=markeredgewidth, linestyle="None")
-            axResiduals.axhline(y=0, color='k', linestyle='--', linewidth=envelopelinewidth)
-            axResiduals.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
-            axResiduals.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=fontsize)
-            axResiduals.tick_params(axis='both', which='major', labelsize=fontsize)
-            # plotOpts(figResiduals, axResiduals, 
-            #     fontsize, xlim, (-3,3), xticks, False, minorTickMultiple, xdim, max((ydim/3,1)),
-            #     tight_layout=tight_layout)
-            axOpts(axResiduals,xlim,(-3,3),xticks,False,minorTickMultiple)
-            ax.invert_xaxis()
-            figOpts(fig, fontsize, xdim, ydim)
-            if tight_layout:
-                plt.tight_layout()
+    #         residuals = y_key - y_fit
+    #         if self.background == False and bgdata != False:
+    #             residuals += -y_bg
+    #         residual_axis.plot(x_key,residuals/np.std(residuals), ms=self.marker_size/2, c="k", alpha=self.marker_alpha, marker=cls.residual_marker, mew=self.marker_edge_width, linestyle="None")
+    #         residual_axis.axhline(y=0, color='k', linestyle='--', linewidth=envelopelinewidth)
+    #         residual_axis.set_xlabel("Binding Energy (eV)", fontsize=fontsize)
+    #         residual_axis.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=fontsize)
+    #         residual_axis.tick_params(axis='both', which='major', labelsize=fontsize)
+    #         self.ax_opts(residual_axis,xlim,(-3,3),xticks,False,minorTickMultiple, **kwargs)
+    #         ax.invert_xaxis()
+    #         self.figOpts(fig, fontsize, xdim, ydim)
+    #         if tight_layout:
+    #             plt.tight_layout()
 
-            print(saveFig)
-            if isinstance(saveFig,dict):
-                fig.savefig(saveFig[key]+".svg")
-            if isinstance(saveFig,str):
-                fig.savefig(saveFig+".svg")
+    #         print(save_fig)
+    #         if isinstance(save_fig,dict):
+    #             fig.savefig(save_fig[key]+".svg")
+    #         if isinstance(save_fig,str):
+    #             fig.savefig(save_fig+".svg")
+
+    @staticmethod
+    def ax_opts(ax, xlim=None, ylim=None, xticks=False, yticks=False, tick_direction='out',
+                major_tick_multiple=0, minor_tick_multiple=0):
+        if xlim != None:
+            ax.set_xlim(xlim)
+        if ylim != None:
+            ax.set_ylim(ylim)
+            
+        if xticks != False:
+            ax.set_xticks(xticks)
+        if yticks == False:
+            ax.set_yticks([])
+        elif yticks == True:
+            ax.set_yticks()
+        else:
+            ax.set_yticks(yticks)
+            
+        ax.tick_params(direction=tick_direction)
+        # specifying major_tick_multiple overrides manual xticks spec
+        if major_tick_multiple > 0:
+            ax.xaxis.set_major_locator(MultipleLocator(major_tick_multiple))
+        if minor_tick_multiple > 0:
+            ax.xaxis.set_minor_locator(MultipleLocator(minor_tick_multiple))
+                
+    @staticmethod
+    def figOpts(fig, fontsize, xdim, ydim):
+        fig.set_size_inches(xdim,ydim)
+
+    @classmethod
+    def set_class_plot_config(cls, profile=None,
+                            # font options
+                            font_family='Arial', label_font_size=12, tick_font_size=12, usetex=False,
+                            # line styling options
+                            envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25,
+                            # marker styling options
+                            marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3):
+        # TODO add presents that can be overwritten if any of the below are user-specified
+        if profile == 'print':
+            pass
+        elif profile == 'slide':
+            pass
+        
+        cls.font_family = font_family
+        cls.label_font_size = label_font_size
+        cls.tick_font_size = tick_font_size
+        cls.usetex = usetex
+        
+        cls.envelope_linewidth = envelope_linewidth
+        cls.component_linewidth = component_linewidth
+        cls.axes_linewidth = axes_linewidth
+        
+        cls.marker = marker
+        cls.residual_marker = residual_marker
+        cls.marker_size = marker_size
+        cls.marker_alpha = marker_alpha
+        cls.marker_edge_width = marker_edge_width
+        
+        rc('font',**{'family':'sans-serif','sans-serif':[cls.font_family]})
+        rc('text', usetex=cls.usetex)
+        rcParams['axes.linewidth'] = cls.axes_linewidth
 
     # stolen from PyARPES
+    ## TODO update to use scipy integration routine
     @staticmethod
     def calculate_shirley_background(
         xps: np.ndarray, eps=1e-7, max_iters=50, n_samples=(5,5)
