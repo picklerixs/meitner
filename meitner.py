@@ -17,10 +17,10 @@ class Pes:
     
     # initialize Pes instance by taking dictionary of PES dataframes
     # df cols: be, ke, cps
-    def __init__(self, df_dict):
+    def __init__(self, df_dict, n_peaks=1):
         self.df_dict = df_dict
         self.keys_list = list(df_dict.keys())
-        self.n_peaks = self.set_n_peaks(1)
+        self.set_n_peaks(n_peaks)
         
     def plot_survey(self, keys_list=None, **kwargs):
         if keys_list == None:
@@ -33,7 +33,7 @@ class Pes:
     # TODO: add automatic matching of partial region_id (e.g., C = C1 1 or S 2p = S2p/Se3p)
     @classmethod
     def from_vamas(cls, path, region_id=None, be_range=None, read_phi=False, shift=None, 
-                     dict_keys=None, **kwargs):
+                     dict_keys=None, n_peaks=1, **kwargs):
         df_dict = {}
         
         # if single path is specified, repack into list
@@ -66,7 +66,7 @@ class Pes:
             df = cls.import_single_vamas(path[k], region_id=region_id_k, shift=shift_k,
                                     be_range=be_range_k, read_phi=read_phi_k, **kwargs)
             df_dict.update({key: df})
-        return cls(df_dict)
+        return cls(df_dict, n_peaks=n_peaks)
     
     # wrapper for Vamas() to extract a single PES dataframe from VAMAS data
     @staticmethod
@@ -234,10 +234,10 @@ class Pes:
             n_peaks_key = self.n_peaks[key]
                 
             for peak_number in range(n_peaks_key):
-                peak_id = "data_{}_p_{}_".format(key, peak_number)
+                peak_id = "data_{}_p{}_".format(key, peak_number)
                 # basis parameters
                 self.params.add(peak_id+"amplitude", value=(max(y_key)-min(y_key))*1.5, min=0)
-                self.params.add(peak_id+"center", value=be_guess[key][peak_number], min=min(x_key), max=max(x_key))
+                self.params.add(peak_id+"center", value=self.be_guess[key][peak_number], min=min(x_key), max=max(x_key))
                 # for pseudo-Voigt, sigma is the width of both the Gaussian and the Lorentzian component
                 # for Voigt, sigma is the width of the Gaussian component and gamma is of the Lorentzian component
                 self.params.add(peak_id+"sigma", value=sigma_guess, min=sigma_min, max=sigma_max, vary=sigma_vary)
@@ -382,12 +382,12 @@ class Pes:
         elif self.is_list_or_tuple(n_peaks):
             self.n_peaks = dict(zip(self.keys_list, n_peaks))
         # generate dict from float/int
-        elif self.is_float_or_int(self.n_peaks):
-            self.n_peaks = dict(zip(self.keys_list, [n_peaks for _ in range(self.keys_list)]))
+        elif self.is_float_or_int(n_peaks):
+            self.n_peaks = dict(zip(self.keys_list, [n_peaks for _ in range(len(self.keys_list))]))
     
     def generate_model_single_spectrum_no_bg(self, key, x, model=0, lineshape="voigt"):
         self.model = model
-        for k in range(n_peaks):
+        for k in range(self.n_peaks[key]):
             peak_id = "data_{}_p_{}_".format(key, k)
             
             if isinstance(lineshape, str):
