@@ -203,7 +203,7 @@ class Pes:
                     self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **kwargs)
                 elif self.background == 'linear':
                     pass
-                self.df_dict[key]['cps_bg_subtracted'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
+                self.df_dict[key]['cps_no_bg'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
         self.result = minimize(self.residual, self.params)
         for key in self.keys_list:
             df_key = self.df_dict[key]
@@ -224,7 +224,7 @@ class Pes:
             # print(keys_list)
             # TODO figure out why keys_list gets turned into Parameters object..
             x_key = np.array(self.df_dict[key]['be'])
-            y_key = np.array(self.df_dict[key]['cps_bg_subtracted'])
+            y_key = np.array(self.df_dict[key]['cps_no_bg'])
 
             resid = (y_key - self.generate_model_single_spectrum_no_bg(params, key, x_key, **kwargs))/(len(x_key)*np.linalg.norm(x_key))
             residuals = np.append(residuals, resid)
@@ -481,7 +481,7 @@ class Pes:
     #         y_key = np.copy(np.array(self.df_dict[key]['cps']))
             
     #         if subtract_bg:
-    #             cps_axis = 'cps_bg_subtracted'
+    #             cps_axis = 'cps_no_bg'
     #         else:
     #             cps_axis = 'cps'
                 
@@ -600,7 +600,7 @@ class Pes:
                             envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25,
                             # marker styling options
                             marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3):
-        # TODO add presents that can be overwritten if any of the below are user-specified
+        # TODO add presents that can be overwritten if any of the individual parameters are user-specified
         if profile == 'print':
             pass
         elif profile == 'slide':
