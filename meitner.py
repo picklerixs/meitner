@@ -10,7 +10,7 @@ from lmfit import minimize, Parameters
 from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
-
+# TODO clean up passing of kwargs to different methods
 class Pes:
     
     colors = [[98/255,146/255,190/255], # mid-blue
