@@ -289,6 +289,12 @@ class Pes:
             elif self.is_list_or_tuple(be_guess[0]):
                 self.be_guess = dict(zip(keys_list, be_guess))
                 
+        if self.is_list_or_tuple(peak_spacings) and (not self.is_list_or_tuple(peak_spacings[0])):
+            peak_spacings = [peak_spacings]
+            
+        if self.is_list_or_tuple(peak_ratios) and (not self.is_list_or_tuple(peak_ratios[0])):
+            peak_ratios = [peak_ratios]
+                
         for key in keys_list:
             x_key = np.array(self.df_dict[key]['be'])
             y_key = np.array(self.df_dict[key]['cps'])
@@ -397,8 +403,9 @@ class Pes:
                         self.params.add(dataKey+peak1+"_"+peak2+"_ratio", value=peakRatios[2])
                         self.params[dataKey+peak1+"_"+peak2+"_ratio"].vary = False
                     self.params.add(dataKey+peak1+"_amplitude", expr=dataKey+peak2+"_amplitude*"+dataKey+peak1+"_"+peak2+"_ratio")
-                
+
             if peak_spacings != False and (isinstance(peak_spacings, list) or isinstance(peak_spacings, tuple)):
+                dataKey = "data_"+key+"_"
                 # for i in range(len(constrainPeakSpacings)):
                 #     peakSpacings = constrainPeakSpacings[i]
                 for peakSpacings in peak_spacings:
@@ -477,6 +484,7 @@ class Pes:
     # TODO add stacking functionality for multiple spectra
     # TODO make display_residuals flag functional
     # TODO implement normalization after bg subtraction (not necessary?)
+    # TODO implement plotting of initial fit
     def plot_result(self, 
                     subtract_bg=True, normalize=True,
                     display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
@@ -523,10 +531,6 @@ class Pes:
             # if ypad != False or (ypad != 0):
             #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
             
-            if energy_axis == 'be':
-                ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
-            elif energy_axis == 'ke':
-                ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             ax.set_ylabel("Intensity", fontsize=self.label_font_size)
             ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             if text != None:
@@ -538,8 +542,10 @@ class Pes:
             sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
                             ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width)
-            residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
-            residual_ax.set_ylabel("${\it R}/\it{\sigma_{R}}$", fontsize=self.label_font_size)
+            if energy_axis == 'be':
+                residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+            elif energy_axis == 'ke':
+                residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             self.ax_opts(residual_ax, **ax_kwargs)
             ax.invert_xaxis()
@@ -588,7 +594,7 @@ class Pes:
                             envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25, background_linewidth=1.25,
                             # marker styling options
                             marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3):
-        # TODO add presents that can be overwritten if any of the individual parameters are user-specified
+        # TODO add presets that can be overwritten if any of the individual parameters are user-specified
         if profile == 'print':
             pass
         elif profile == 'slide':
