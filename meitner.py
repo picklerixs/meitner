@@ -491,7 +491,7 @@ class Pes:
                     text=None,
                     tight_layout=True,
                     colors=colors, component_z_spec=False, xdim=3.25*4/3, ydim=3.25, energy_axis='be',
-                    save_fig=False, ypad=0, ax_kwargs=None, **kwargs):
+                    save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
         
         j = 0
         for key in self.keys_list:
@@ -531,7 +531,10 @@ class Pes:
             # if ypad != False or (ypad != 0):
             #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
             
-            ax.set_ylabel("Intensity", fontsize=self.label_font_size)
+            if ylabel == None or (not isinstance(ylabel, str)):
+                ylabel = 'Intensity'
+            
+            ax.set_ylabel(ylabel, fontsize=self.label_font_size)
             ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             if text != None:
                 ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
@@ -539,17 +542,20 @@ class Pes:
                 plt.tight_layout()
             j += 1
             
+            residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
             sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
                             ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width)
-            residual_ax.set_ylabel("Std. Resid.", fontsize=self.label_font_size)
+            residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
             if energy_axis == 'be':
                 residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+                residual_ax.invert_xaxis() # only need to invert one axis
             elif energy_axis == 'ke':
                 residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
-            self.ax_opts(residual_ax, **ax_kwargs)
-            ax.invert_xaxis()
+            self.ax_opts(residual_ax, ylim=[-6,6], **ax_kwargs)
+            
+            fig.set_size_inches(xdim,ydim)
             if tight_layout:
                 plt.tight_layout()
 
