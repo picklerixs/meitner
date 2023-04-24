@@ -7,6 +7,7 @@ import warnings
 from vamas import Vamas
 from scipy.special import wofz
 from lmfit import minimize, Parameters
+from lmfit.models import LinearModel
 from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
@@ -192,18 +193,29 @@ class Pes:
         return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
     
     @staticmethod
-    def linear(x, slope, intercept):
+    def calculate_linear_background(x, slope, intercept):
         return slope*x + intercept
     
-    def fit_data(self, lineshape="voigt", bgdata=None, **kwargs):
+    def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None):
         if bgdata == None:
             for key in self.keys_list:
                 # TODO integrate generation of bg column into background function itself?
                 # TODO implement linear bg
                 if self.background == 'shirley':
-                    self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **kwargs)
+                    if not isinstance(shirley_kwargs, dict):
+                        shirley_kwargs = {}
+                    if self.is_list_or_tuple(n_samples):
+                        shirley_kwargs['n_samples'] = n_samples
+                    self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **shirley_kwargs)
                 elif self.background == 'linear':
-                    pass
+                    bgx = np.concatenate((self.df_dict[key]['be'][0:n_samples[0]],
+                            self.df_dict[key]['be'][-n_samples[1]:]))
+                    bgy0 = np.concatenate((self.df_dict[key]['cps'][0:n_samples[0]],
+                                self.df_dict[key]['cps'][-n_samples[1]:]))
+                    bgmodel = LinearModel(prefix="data_"+key+"_bg_")
+                    bgparams = bgmodel.make_params()
+                    bgresult = bgmodel.fit(bgy0, bgparams, x=bgx)
+                    self.df_dict[key]['bg'] = bgresult.params["data_"+key+"_bg_intercept"] + bgresult.params["data_"+key+"_bg_slope"]*self.df_dict[key]['be']
                 self.df_dict[key]['cps_no_bg'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
                 
         self.result = minimize(self.residual, self.params)
