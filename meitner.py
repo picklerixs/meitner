@@ -12,6 +12,7 @@ from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 # TODO clean up passing of kwargs to different methods
+# TODO add support for filetypes other than VAMAS
 class Pes:
     
     colors = [[98/255,146/255,190/255], # mid-blue
@@ -30,26 +31,30 @@ class Pes:
     background = 'shirley'
     params = {}
     
-    # initialize Pes instance by taking dictionary of PES dataframes
-    # df cols: be, ke, cps
     def __init__(self, df_dict, n_peaks=1):
+        '''Generate PES dataframe(s).'''
         self.df_dict = df_dict
         self.keys_list = list(df_dict.keys())
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
-    def plot_survey(self, keys_list=None, **kwargs):
+    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, **kwargs):
+        '''Plot survey spectrum for each PES dataframe.'''
+        if not isinstance(ax_kwargs, dict):
+            ax_kwargs = {}
         if keys_list == None:
             keys_list = self.keys_list
         for key in keys_list:
-            self.survey_fig, self.survey_ax = plt.subplots()
+            self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
             sns.scatterplot(data=self.df_dict[key], x='be', y='cps', **kwargs)
+            self.ax_opts(self.survey_ax, **ax_kwargs)
+            self.survey_fig.set_size_inches(xdim,ydim)
         
-    # alternate constructor to import PES dataframes from VAMAS data
     # TODO: add automatic matching of partial region_id (e.g., C = C1 1 or S 2p = S2p/Se3p)
     @classmethod
     def from_vamas(cls, path, region_id=None, be_range=None, read_phi=False, shift=None, 
                      dict_keys=None, n_peaks=1, **kwargs):
+        '''Alternate constructor to import PES dataframes from VAMAS data.'''
         df_dict = {}
         
         # if single path is specified, repack into list
@@ -84,7 +89,6 @@ class Pes:
             df_dict.update({key: df})
         return cls(df_dict, n_peaks=n_peaks)
     
-    # wrapper for Vamas() to extract a single PES dataframe from VAMAS data
     @staticmethod
     def import_single_vamas(path, region_id=None,
                 # data processing options
@@ -92,6 +96,7 @@ class Pes:
                 be_range=None,
                 read_phi=False,
                 normalize=False):
+        '''Wrapper for Vamas() to extract a single PES dataframe from VAMAS data.'''
 
 
         if path[-4:] == ".vms":
@@ -187,14 +192,10 @@ class Pes:
     
     @staticmethod
     # borrowed from Andreas Seibert
-    def calc_voigt_fwhm(sigma, gamma):
+    def calculate_voigt_fwhm(sigma, gamma):
         fl = 2*gamma
         fg = 2*sigma
         return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
-    
-    @staticmethod
-    def calculate_linear_background(x, slope, intercept):
-        return slope*x + intercept
     
     def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None):
         if bgdata == None:
@@ -335,8 +336,8 @@ class Pes:
                     self.params.add(peak_id+"lfwhm", expr="2*"+peak_id+"gamma")
                     self.params.add(peak_id+"glmix", expr=peak_id+"lfwhm/("+peak_id+"lfwhm+"+peak_id+"gfwhm)",
                             min=glmix_min, max=glmix_max)
-                    self.params._asteval.symtable['calc_voigt_fwhm'] = self.calc_voigt_fwhm
-                    self.params.add(peak_id+"fwhm", expr="calc_voigt_fwhm("+peak_id+"sigma,"+peak_id+"gamma)", 
+                    self.params._asteval.symtable['calculate_voigt_fwhm'] = self.calculate_voigt_fwhm
+                    self.params.add(peak_id+"fwhm", expr="calculate_voigt_fwhm("+peak_id+"sigma,"+peak_id+"gamma)", 
                             min=fwhm_min, max=fwhm_max)
                 
                 for i in range(peak_number):
@@ -508,7 +509,7 @@ class Pes:
         j = 0
         for key in self.keys_list:
             # use gridspec to combine main and residual plots
-            fig = plt.figure()
+            fig = plt.figure(layout='constrained')
             gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
             ax, residual_ax = gs.subplots(sharex=True,sharey=False)
             df_key = self.df_dict[key]            
@@ -550,8 +551,8 @@ class Pes:
             ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             if text != None:
                 ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
-            if tight_layout:
-                plt.tight_layout()
+            # if tight_layout:
+            #     plt.tight_layout()
             j += 1
             
             residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
@@ -568,8 +569,8 @@ class Pes:
             self.ax_opts(residual_ax, ylim=[-6,6], **ax_kwargs)
             
             fig.set_size_inches(xdim,ydim)
-            if tight_layout:
-                plt.tight_layout()
+            # if tight_layout:
+            #     plt.tight_layout()
 
             print(save_fig)
             if isinstance(save_fig,dict):
