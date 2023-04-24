@@ -542,6 +542,7 @@ class Pes:
             sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
                             ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width)
+            residual_ax.set_ylabel("Std. Resid.", fontsize=self.label_font_size)
             if energy_axis == 'be':
                 residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
             elif energy_axis == 'ke':
