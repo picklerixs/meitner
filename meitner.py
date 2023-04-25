@@ -63,6 +63,8 @@ class Pes:
             self.survey_fig.set_size_inches(xdim,ydim)
         
     # TODO: add automatic matching of partial region_id (e.g., C = C1 1 or S 2p = S2p/Se3p)
+    # TODO optimize read times if the same vamas file is referenced multiple times
+    # ! if reading multiple spectra from one file, path must be same length as region_id
     @classmethod
     def from_vamas(cls, path, region_id=None, be_range=None, read_phi=False, shift=None, 
                      dict_keys=None, n_peaks=1, **kwargs):
@@ -118,16 +120,17 @@ class Pes:
             # check spectra contained in VAMAS by pulling block_identifier for each block
             ids = [data.blocks[k].block_identifier for k in range(len(data.blocks))]
             
+            print('Found ' + str(len(ids)) + ' blocks')
+            
             # if spectrum was not specified, prompt user to select
-            if region_id == None or (region_id == False):
-                print('Found ' + str(len(ids)) + ' blocks with names')
-                print(ids)
+            if isinstance(region_id, int):
+                idx = region_id
+            elif region_id == None or (region_id == False):
                 region_id = input('Specify spectrum ID to access...')
+                print(ids)
                 print()
                 print(region_id)
-            elif isinstance(region_id, int):
-                region_id=ids[region_id]
-            
+
             # get block index of desired spectrum
             if region_id in ids:
                 idx = ids.index(region_id)
