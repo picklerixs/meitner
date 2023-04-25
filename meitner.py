@@ -11,6 +11,18 @@ from lmfit.models import LinearModel
 from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
+# TODO improve default params
+# TODO clean up parameter specifications
+# TODO add support for kwargs
+def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
+    au4f = Pes.from_vamas(path, region_id=region_id, be_range=be_range)
+    au4f.set_n_peaks(2)
+    au4f.generate_params(be_guess=[83,87], peak_spacings=[1,0,3.67], peak_ratios=[1,0,0.75])
+    au4f.fit_data(shirley_kwargs=shirley_kwargs)
+    if plot_result:
+        au4f.plot_result()
+    return 84 - au4f.result.params['data_0_p0_center'].value
+
 # TODO clean up passing of kwargs to different methods
 # TODO add support for filetypes other than VAMAS
 class Pes:
