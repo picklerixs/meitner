@@ -125,6 +125,8 @@ class Pes:
                 region_id = input('Specify spectrum ID to access...')
                 print()
                 print(region_id)
+            elif isinstance(region_id, int):
+                region_id=ids[region_id]
             
             # get block index of desired spectrum
             if region_id in ids:
