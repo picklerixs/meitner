@@ -5,6 +5,7 @@ import seaborn as sns
 import warnings
 
 from vamas import Vamas
+from math import ceil
 from scipy.special import wofz
 from lmfit import minimize, Parameters
 from lmfit.models import LinearModel
@@ -14,6 +15,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 # TODO improve default params
 # TODO clean up parameter specifications
 # TODO add support for kwargs
+# TODO take dict of PES dataframes or Pes object as input instead?
 def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
     au4f = Pes.from_vamas(path, region_id=region_id, be_range=be_range)
     au4f.set_n_peaks(2)
@@ -22,6 +24,40 @@ def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='
     if plot_result:
         au4f.plot_result()
     return 84 - au4f.result.params['data_0_p0_center'].value
+
+def average_all_dataframes(df_dict):
+    keys_list = list(df_dict.keys())
+    df_cols = list(df_dict[keys_list[0]].columns)
+    df = pd.DataFrame(dict(zip(df_cols, [[] for _ in range(len(df_cols))])))
+    cps_arr = []
+    for key in keys_list:
+        cps_arr.append(df_dict[key]['cps'])
+        
+    cps_arr = np.array(cps_arr)
+    cps_avg = np.mean(cps_arr, axis=0)
+
+    for i in range(2):
+        df[df_cols[i]] = df_dict[keys_list[0]][df_cols[i]]
+        
+    df['cps'] = cps_avg
+    return df
+
+def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None):
+    if start == None:
+        start = step
+    if stop == None:
+        stop = len(df_dict)
+    if keys_list == None:
+        keys_list = [str(i) for i in range(ceil((stop-start)/step))]
+    avg_df_dict = {}
+    df_dict_keys = list(df_dict.keys())
+    i0 = 0
+    k = 0
+    for i in range(start, stop, step):
+        avg_df_dict.update({keys_list[k]: average_all_dataframes({df_dict_keys[j]: df_dict[df_dict_keys[j]] for j in range(i0, i, 1)})})
+        i0 = np.copy(i)
+        k += 1
+    return avg_df_dict
 
 # TODO clean up passing of kwargs to different methods
 # TODO add support for filetypes other than VAMAS
