@@ -45,8 +45,12 @@ class Pes:
     
     def __init__(self, df_dict, n_peaks=1):
         '''Generate PES dataframe(s).'''
-        self.df_dict = df_dict
-        self.keys_list = list(df_dict.keys())
+        if isinstance(df_dict, dict):
+            self.df_dict = df_dict
+            self.keys_list = list(df_dict.keys())
+        elif self.is_list_or_tuple(df_dict):
+            self.keys_list = [str(i) for i in range(len(df_dict))]
+            self.df_dict = dict(zip([self.keys_list, df_dict]))
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
