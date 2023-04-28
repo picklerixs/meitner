@@ -501,7 +501,7 @@ class Pes:
                     # print(params[dataKey+peak1+"_center"])
                     
         # unpack user-specified expression-based constraints
-        if expr_constraints != False and isinstance(expr_constraints, dict):
+        if isinstance(expr_constraints, dict):
             for key in list(expr_constraints.keys()):
                 if isinstance(expr_constraints[key], str):
                     self.params.add(key, expr=expr_constraints[key])
@@ -623,7 +623,7 @@ class Pes:
             elif energy_axis == 'ke':
                 residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
-            self.ax_opts(residual_ax, ylim=[-6,6], **ax_kwargs)
+            self.ax_opts(residual_ax, ylim=[-4,4], **ax_kwargs)
             
             fig.set_size_inches(xdim,ydim)
             # if tight_layout:
