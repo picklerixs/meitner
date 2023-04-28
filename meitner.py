@@ -598,8 +598,11 @@ class Pes:
             if not isinstance(ax_kwargs, dict):
                 ax_kwargs = {}
             self.ax_opts(ax, **ax_kwargs)
-            # if ypad != False or (ypad != 0):
-            #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
+            # ! overwrites manual specification of ylim
+            if ypad != False or (ypad != 0):
+                ymin = min(df_key['cps'+bg_suffix])
+                ymax = max(df_key['cps'+bg_suffix])
+                ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
             
             if ylabel == None or (not isinstance(ylabel, str)):
                 ylabel = 'Intensity'
