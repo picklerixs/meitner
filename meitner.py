@@ -29,7 +29,7 @@ def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='
     return 84 - au4f.result.params['data_0_p0_center'].value
 
 # TODO employ iteration if dataframes have same range but different eV step sizes
-def average_all_dataframes(df_dict):
+def average_all_dataframes(df_dict, weights=None):
     '''Averages the cps columns of multiple equal-length PES dataframes'''
     keys_list = list(df_dict.keys())
     df_cols = ['ke', 'be', 'cps']
@@ -40,7 +40,7 @@ def average_all_dataframes(df_dict):
         cps_arr.append(df_dict[key]['cps'])
         
     cps_arr = np.array(cps_arr)
-    cps_avg = np.mean(cps_arr, axis=0)
+    cps_avg = np.average(cps_arr, axis=0, weights=weights)
 
     # output average
     for i in range(2):
@@ -48,7 +48,7 @@ def average_all_dataframes(df_dict):
     df['cps'] = cps_avg
     return df
 
-def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None):
+def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None, weights=None):
     '''Averages the cps columns of equal-length PES dataframes in groups of size step in the range from start to stop, inclusive'''
     if start == None:
         start = 0
@@ -61,7 +61,7 @@ def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None):
     i0 = 0
     k = 0
     for i in range(start+step, stop, step):
-        avg_df_dict.update({keys_list[k]: average_all_dataframes({df_dict_keys[j]: df_dict[df_dict_keys[j]] for j in range(i0, i, 1)})})
+        avg_df_dict.update({keys_list[k]: average_all_dataframes({df_dict_keys[j]: df_dict[df_dict_keys[j]] for j in range(i0, i, 1)}, weights=weights)})
         i0 = np.copy(i)
         k += 1
     return avg_df_dict
