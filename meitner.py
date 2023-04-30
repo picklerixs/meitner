@@ -19,15 +19,21 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
     au4f = Pes.from_vamas(path, region_id=region_id, be_range=be_range)
     au4f.set_n_peaks(2)
-    au4f.generate_params(be_guess=[83,87], peak_spacings=[1,0,3.67], peak_ratios=[1,0,0.75])
+    au4f.background = background
+    if background != 'shirley':
+        shirley_kwargs = None
+    au4f.generate_params(be_guess=be_guess, peak_spacings=[1,0,3.67], peak_ratios=[1,0,0.75])
     au4f.fit_data(shirley_kwargs=shirley_kwargs)
     if plot_result:
         au4f.plot_result()
     return 84 - au4f.result.params['data_0_p0_center'].value
 
+# TODO employ iteration if dataframes have same range but different eV step sizes
 def average_all_dataframes(df_dict):
+    '''Averages the cps columns of multiple equal-length PES dataframes'''
     keys_list = list(df_dict.keys())
-    df_cols = list(df_dict[keys_list[0]].columns)
+    df_cols = ['ke', 'be', 'cps']
+    # initialize empty dataframe
     df = pd.DataFrame(dict(zip(df_cols, [[] for _ in range(len(df_cols))])))
     cps_arr = []
     for key in keys_list:
@@ -36,15 +42,16 @@ def average_all_dataframes(df_dict):
     cps_arr = np.array(cps_arr)
     cps_avg = np.mean(cps_arr, axis=0)
 
+    # output average
     for i in range(2):
         df[df_cols[i]] = df_dict[keys_list[0]][df_cols[i]]
-        
     df['cps'] = cps_avg
     return df
 
 def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None):
+    '''Averages the cps columns of equal-length PES dataframes in groups of size step in the range from start to stop, inclusive'''
     if start == None:
-        start = step
+        start = 0
     if stop == None:
         stop = len(df_dict)
     if keys_list == None:
@@ -53,7 +60,7 @@ def average_dataframes(df_dict, step, start=None, stop=None, keys_list=None):
     df_dict_keys = list(df_dict.keys())
     i0 = 0
     k = 0
-    for i in range(start, stop, step):
+    for i in range(start+step, stop, step):
         avg_df_dict.update({keys_list[k]: average_all_dataframes({df_dict_keys[j]: df_dict[df_dict_keys[j]] for j in range(i0, i, 1)})})
         i0 = np.copy(i)
         k += 1
@@ -257,8 +264,6 @@ class Pes:
     def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None):
         if bgdata == None:
             for key in self.keys_list:
-                # TODO integrate generation of bg column into background function itself?
-                # TODO implement linear bg
                 if self.background == 'shirley':
                     if not isinstance(shirley_kwargs, dict):
                         shirley_kwargs = {}
