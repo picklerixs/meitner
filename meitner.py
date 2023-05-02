@@ -28,6 +28,18 @@ def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='
         au4f.plot_result()
     return 84 - au4f.result.params['data_0_p0_center'].value
 
+def get_au4f_gfwhm(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
+    au4f = Pes.from_vamas(path, region_id=region_id, be_range=be_range)
+    au4f.set_n_peaks(2)
+    au4f.background = background
+    if background != 'shirley':
+        shirley_kwargs = None
+    au4f.generate_params(be_guess=be_guess, peak_spacings=[1,0,3.67], peak_ratios=[1,0,0.75])
+    au4f.fit_data(shirley_kwargs=shirley_kwargs)
+    if plot_result:
+        au4f.plot_result()
+    return au4f.result.params['data_0_p0_gfwhm'].value
+
 # TODO employ iteration if dataframes have same range but different eV step sizes
 def average_all_dataframes(df_dict, weights=None):
     '''Averages the cps columns of multiple equal-length PES dataframes'''
@@ -564,7 +576,7 @@ class Pes:
                     subtract_bg=True, normalize=True,
                     display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
                     text=None,
-                    tight_layout=True,
+                    tight_layout=True, residual_lim=[-3,3],
                     colors=colors, component_z_spec=False, xdim=3.25*4/3, ydim=3.25, energy_axis='be',
                     save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
         
@@ -631,7 +643,7 @@ class Pes:
             elif energy_axis == 'ke':
                 residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
-            self.ax_opts(residual_ax, ylim=[-4,4], **ax_kwargs)
+            self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
             
             fig.set_size_inches(xdim,ydim)
             # if tight_layout:
