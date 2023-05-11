@@ -16,7 +16,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 # TODO clean up parameter specifications
 # TODO add support for kwargs
 # TODO take dict of PES dataframes or Pes object as input instead?
-def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
+def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True, verbose=False):
     au4f = Pes.from_vamas(path, region_id=region_id, be_range=be_range)
     au4f.set_n_peaks(2)
     au4f.background = background
@@ -26,6 +26,10 @@ def get_au4f_shift(path, region_id, be_range=None, be_guess=[83,0], background='
     au4f.fit_data(shirley_kwargs=shirley_kwargs)
     if plot_result:
         au4f.plot_result()
+    if verbose:
+        param_list = ['lfwhm','gfwhm','fwhm','glmix']
+        for param in param_list:
+            print(au4f.result.params['data_0_p0_'+param])
     return 84 - au4f.result.params['data_0_p0_center'].value
 
 def get_au4f_gfwhm(path, region_id, be_range=None, be_guess=[83,0], background='shirley', shirley_kwargs={'n_samples': [5,5]}, plot_result=True):
@@ -117,14 +121,24 @@ class Pes:
             keys_list = self.keys_list
         for key in keys_list:
             self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
-            sns.scatterplot(data=self.df_dict[key], x='be', y='cps', **kwargs)
+            sns.lineplot(data=self.df_dict[key], x='be', y='cps', 
+                ax=self.survey_ax, color='black', **kwargs)
             self.ax_opts(self.survey_ax, **ax_kwargs)
             self.survey_fig.set_size_inches(xdim,ydim)
+            self.survey_ax.set_ylabel('Intensity', fontsize=self.label_font_size)
+            self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+            self.survey_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
     
     # stopgap solution for cases when vamas readout breaks
     @classmethod
     def from_casa_ascii(cls, path, be_range=None, shift=None, n_peaks=1):
         df = pd.read_table(path, skiprows=7, usecols=[0,1], names=['be','cps'])
+        if cls.is_float_or_int(shift):
+            df['be'] = df['be'] + shift
+        if cls.is_list_or_tuple(be_range):
+            be_range_idx = df[(df['be'] <= min(be_range)) | (df['be'] >= max(be_range))].index
+            df.drop(be_range_idx, inplace=True)
+        
         return cls({'0': df}, n_peaks=n_peaks)
     
     # TODO: add automatic matching of partial region_id (e.g., C = C1 1 or S 2p = S2p/Se3p)
