@@ -120,7 +120,13 @@ class Pes:
             sns.scatterplot(data=self.df_dict[key], x='be', y='cps', **kwargs)
             self.ax_opts(self.survey_ax, **ax_kwargs)
             self.survey_fig.set_size_inches(xdim,ydim)
-        
+    
+    # stopgap solution for cases when vamas readout breaks
+    @classmethod
+    def from_casa_ascii(cls, path, be_range=None, shift=None, n_peaks=1):
+        df = pd.read_table(path, skiprows=7, usecols=[0,1], names=['be','cps'])
+        return cls({'0': df}, n_peaks=n_peaks)
+    
     # TODO: add automatic matching of partial region_id (e.g., C = C1 1 or S 2p = S2p/Se3p)
     # TODO optimize read times if the same vamas file is referenced multiple times
     # ! if reading multiple spectra from one file, path must be same length as region_id
