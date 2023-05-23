@@ -7,6 +7,7 @@ import warnings
 from vamas import Vamas
 from math import ceil
 from scipy.special import wofz
+from scipy.integrate import trapezoid
 from lmfit import minimize, Parameters
 from lmfit.models import LinearModel
 from matplotlib import rc, rcParams
@@ -782,3 +783,48 @@ class Pes:
             )
             
         return background
+    
+
+def stack_spectra(data_list, offset=0.02, energy_range=None, y='norm_intensity', legend=None):
+	fig, ax = plt.subplots()
+	i = 0
+	for xas in data_list:
+		df = xas.df
+		df[y] = df[y] + offset*i
+		sns.lineplot(data=df, x='energy', y=y, ax=ax)
+		if is_tuple_or_list(legend):
+			ax.text(min(df['energy']), offset*i, legend[i])
+		i += 1
+	if is_tuple_or_list(energy_range):
+		ax.set_xlim(energy_range)
+	#if is_tuple_or_list(legend):
+		#ax.legend(legend)
+
+def is_tuple_or_list(x):
+	return isinstance(x,tuple) or isinstance(x,list)
+
+class Xas:
+
+	def __init__(self, df, skiprows=None):
+		'''generate Xas object from pre-processed dataframe'''
+		self.df = df
+		if skiprows != None:
+			df.drop(skiprows, inplace=True)
+		y = df['intensity']
+		# normalize by area and shift so that min value is zero
+		self.df['norm_intensity'] = -y/trapezoid(y, x=self.df['energy'])
+		self.df['norm_intensity'] = self.df['norm_intensity'] - min(self.df['norm_intensity'])
+		
+	@classmethod
+	def from_txt(cls, path, drop_zeros=True, energy_range=None, **kwargs):
+		'''initialize Xas object from .fits-derived .txt'''
+		df = pd.read_table(path, names=['time','energy','counts','i0'])
+		if drop_zeros:
+			idx = df[df['energy'] == 0].index
+			df.drop(idx, inplace=True)
+		df['intensity'] = df['counts']/df['i0']
+		return cls(df, **kwargs)
+		
+	def plot(self, energy_range=None, y='norm_intensity'):
+		fig, ax = plt.subplots()
+		sns.lineplot(data=self.df, x='energy', y=y, ax=ax)
