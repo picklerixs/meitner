@@ -129,6 +129,7 @@ class Pes:
             self.survey_ax.set_ylabel('Intensity', fontsize=self.label_font_size)
             self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
             self.survey_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            self.survey_ax.invert_xaxis()
     
     # stopgap solution for cases when vamas readout breaks
     @classmethod
