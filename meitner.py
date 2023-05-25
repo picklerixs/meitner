@@ -617,7 +617,7 @@ class Pes:
             
             sns.lineplot(data=df_key, x=energy_axis, y='cps'+bg_suffix, 
                             ax=ax, mec=self.data_color, marker=self.marker, ls='None',
-                            ms=self.marker_size, mew=self.marker_edge_width)
+                            ms=self.marker_size, mew=self.marker_edge_width, zorder=999)
             
             if display_bg and (not subtract_bg):
                 sns.lineplot(data=df_key, x=energy_axis, y='bg', 
@@ -625,7 +625,7 @@ class Pes:
                 
             if display_envelope:
                 sns.lineplot(data=df_key, x=energy_axis, y='fit'+bg_suffix, 
-                             ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth)
+                             ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=998)
             
             if display_components:
                 i = 0
@@ -710,7 +710,7 @@ class Pes:
                             # font options
                             font_family='Arial', label_font_size=12, tick_font_size=12, usetex=False,
                             # line styling options
-                            envelope_linewidth=1.5, component_linewidth=1.25, axes_linewidth=1.25, background_linewidth=1.25,
+                            envelope_linewidth=1.7, component_linewidth=1.6, axes_linewidth=1.5, background_linewidth=1.6,
                             # marker styling options
                             marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3):
         # TODO add presets that can be overwritten if any of the individual parameters are user-specified
