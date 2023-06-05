@@ -806,22 +806,37 @@ def is_tuple_or_list(x):
 
 class Xas:
 
-	def __init__(self, df, skiprows=None):
-		'''generate Xas object from pre-processed dataframe'''
+	def __init__(self, df, skiprows=None, flip=True):
+		'''
+		generate Xas object from pre-processed dataframe
+		skiprows: number of leading rows to skip
+		flip: multiply spectrum by -1 if True
+		'''
 		self.df = df
 		if skiprows != None:
 			df.drop(skiprows, inplace=True)
-		y = df['intensity']
+		if flip == True:
+			flip = -1
+		else:
+			flip = 1
+		y = df['intensity']*flip
 		# normalize by area and shift so that min value is zero
-		self.df['norm_intensity'] = -y/trapezoid(y, x=self.df['energy'])
+		self.df['norm_intensity'] = y/trapezoid(y, x=self.df['energy'])
 		self.df['norm_intensity'] = self.df['norm_intensity'] - min(self.df['norm_intensity'])
 		
 	@classmethod
 	def from_txt(cls, path, drop_zeros=True, energy_range=None, **kwargs):
-		'''initialize Xas object from .fits-derived .txt'''
+		'''
+		initialize Xas object from .fits-derived .txt
+		drop_zeroes: drop columns in which energy=0
+		energy_range: trim rows to lower and upper limit, exclusive. format: [lower, upper]
+		'''
 		df = pd.read_table(path, names=['time','energy','counts','i0'])
 		if drop_zeros:
 			idx = df[df['energy'] == 0].index
+			df.drop(idx, inplace=True)
+		if is_tuple_or_list(energy_range):
+			idx = df[(df['energy'] < min(energy_range)) | (df['energy'] > max(energy_range))].index
 			df.drop(idx, inplace=True)
 		df['intensity'] = df['counts']/df['i0']
 		return cls(df, **kwargs)
