@@ -814,14 +814,14 @@ class Xas:
         '''
         self.df = df
         if skiprows != None:
-            df.drop(skiprows, inplace=True)
-        if flip == True:
+            self.df.drop(skiprows, inplace=True)
+        if flip:
             flip = -1
         else:
             flip = 1
-        y = df['intensity']*flip
+        y = self.df['intensity']*flip
         # normalize by area and shift so that min value is zero
-        self.df['norm_intensity'] = y/trapezoid(y, x=self.df['energy'])
+        self.df['norm_intensity'] = y/abs(trapezoid(y, x=self.df['energy']))
         self.df['norm_intensity'] = self.df['norm_intensity'] - min(self.df['norm_intensity'])
         
     @classmethod
@@ -885,3 +885,23 @@ class Xas:
         else:
             fig, ax = plt.subplots()
         series = ax.plot(df['energy'], norm_intensity_avg)
+        
+    @staticmethod
+    def plot_all(dir, prefix, id_list, xlim=None, flip=True, **kwargs):
+        path_list = []
+        for k in id_list:
+            if k < 10:
+                id = '0{}'.format(k)
+            else:
+                id = str(k)
+            path_list.append(dir+prefix+id+'.txt')
+        # import data
+        data_list = Xas.generate_data_list(path_list, flip=flip, **kwargs)
+        # plot
+        fig, ax = plt.subplots(2,1,sharex=True,sharey=False)
+        Xas.stack_spectra(data_list, ax_spec=ax[0])
+        Xas.average_spectra(data_list, ax_spec=ax[1])
+        if is_tuple_or_list(xlim):
+            for axi in ax:
+                axi.set_xlim(left=min(xlim),right=max(xlim))
+        fig.set_size_inches(3.25,3.25*1.618)
