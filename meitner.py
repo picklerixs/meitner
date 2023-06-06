@@ -815,14 +815,20 @@ class Xas:
         self.df = df
         if skiprows != None:
             self.df.drop(skiprows, inplace=True)
-        if flip:
-            flip = -1
-        else:
-            flip = 1
-        y = self.df['intensity']*flip
-        # normalize by area and shift so that min value is zero
-        self.df['norm_intensity'] = y/abs(trapezoid(y, x=self.df['energy']))
-        self.df['norm_intensity'] = self.df['norm_intensity'] - min(self.df['norm_intensity'])
+        # print(df)
+        if 'norm_intensity' not in self.df.columns:
+            if flip:
+                flip = -1
+            else:
+                flip = 1
+            y = self.df['intensity']*flip
+            if flip:
+                y = y - max(y)
+            else:
+                y = y - min(y)
+            # normalize by area and shift so that min value is zero
+            self.df['norm_intensity'] = y/abs(trapezoid(y, x=self.df['energy']))
+            self.df['norm_intensity'] = self.df['norm_intensity'] - min(self.df['norm_intensity'])
         
     @classmethod
     def from_txt(cls, path, drop_zeros=True, energy_range=None, **kwargs):
@@ -885,6 +891,9 @@ class Xas:
         else:
             fig, ax = plt.subplots()
         series = ax.plot(df['energy'], norm_intensity_avg)
+        # TODO: fix this atrocity
+        df = pd.DataFrame(np.transpose(np.array([np.array(df['energy']), norm_intensity_avg])), columns=['energy', 'intensity'])
+        return Xas(df, flip=False)
         
     @staticmethod
     def plot_all(dir, prefix, id_list, xlim=None, flip=True, **kwargs):
@@ -900,8 +909,9 @@ class Xas:
         # plot
         fig, ax = plt.subplots(2,1,sharex=True,sharey=False)
         Xas.stack_spectra(data_list, ax_spec=ax[0])
-        Xas.average_spectra(data_list, ax_spec=ax[1])
+        xas = Xas.average_spectra(data_list, ax_spec=ax[1])
         if is_tuple_or_list(xlim):
             for axi in ax:
                 axi.set_xlim(left=min(xlim),right=max(xlim))
         fig.set_size_inches(3.25,3.25*1.618)
+        return xas
