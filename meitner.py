@@ -846,7 +846,7 @@ class Xas:
             df.drop(idx, inplace=True)
         df['intensity'] = df['counts']/df['i0']
         return cls(df, **kwargs)
-    @staticmethod
+    
     def plot(self, energy_range=None, y='norm_intensity'):
         fig, ax = plt.subplots()
         sns.lineplot(data=self.df, x='energy', y=y, ax=ax)
