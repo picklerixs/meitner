@@ -295,15 +295,42 @@ class Pes:
         fg = 2*sigma
         return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
     
-    def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None):
+    def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None, bg_midpoint=None):
         if bgdata == None:
             for key in self.keys_list:
+                min_be = min(self.df_dict[key]['be'])
+                max_be = max(self.df_dict[key]['be'])
+                # print(self.df_dict[key]['be'])
+                self.df_dict[key]['bg'] = None
                 if self.background == 'shirley':
                     if not isinstance(shirley_kwargs, dict):
                         shirley_kwargs = {}
                     if self.is_list_or_tuple(n_samples):
                         shirley_kwargs['n_samples'] = n_samples
-                    self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **shirley_kwargs)
+                    if self.is_float_or_int(bg_midpoint):
+                        # lower_idx = self.df_dict[key][(self.df_dict[key]['be'] >= min_be) | (self.df_dict[key]['be'] <= bg_midpoint)].index
+                        # print('lower')
+                        # print(lower_idx)
+                        # upper_idx = self.df_dict[key][(self.df_dict[key]['be'] > bg_midpoint) | (self.df_dict[key]['be'] <= max_be)].index
+                        # print('upper')
+                        # print(upper_idx)
+                        # self.df_dict[key]['bg'].iloc[lower_idx] = self.calculate_shirley_background(self.df_dict[key]['cps'].iloc[lower_idx], **shirley_kwargs)
+                        # self.df_dict[key]['bg'].iloc[upper_idx] = self.calculate_shirley_background(self.df_dict[key]['cps'].iloc[upper_idx], **shirley_kwargs)
+                        df_lower = self.df_dict[key].loc[(self.df_dict[key]['be'] <= bg_midpoint)]
+                        df_upper = self.df_dict[key].loc[(self.df_dict[key]['be'] > bg_midpoint)]
+                        # print('lower')
+                        # print(df_lower)
+                        # print('upper')
+                        # print(df_upper)
+                        # TODO at bg_midpoint force nsamples=1
+                        bg_lower = self.calculate_shirley_background(df_lower['cps'], **shirley_kwargs)
+                        bg_upper = self.calculate_shirley_background(df_upper['cps'], **shirley_kwargs)
+                        # a = self.calculate_shirley_background(self.df_dict[key]['cps'].loc[(self.df_dict[key]['be'] <= bg_midpoint)], **shirley_kwargs)
+                        # b = self.calculate_shirley_background(self.df_dict[key]['cps'].loc[(self.df_dict[key]['be'] > bg_midpoint)], **shirley_kwargs)
+                        print(bg_lower)
+                        print(bg_upper)
+                    else:
+                        self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **shirley_kwargs)
                 elif self.background == 'linear':
                     bgx = np.concatenate((self.df_dict[key]['be'][0:n_samples[0]],
                             self.df_dict[key]['be'][-n_samples[1]:]))
