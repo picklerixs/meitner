@@ -207,9 +207,9 @@ class Pes:
             if isinstance(region_id, int):
                 idx = region_id
             elif region_id == None or (region_id == False):
-                region_id = input('Specify spectrum ID to access...')
-                print(ids)
                 print()
+                print(ids)
+                region_id = input('Specify spectrum ID to access...')
                 print(region_id)
 
             # get block index of desired spectrum
