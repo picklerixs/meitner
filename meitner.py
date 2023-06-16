@@ -114,7 +114,7 @@ class Pes:
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
-    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, **kwargs):
+    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, **kwargs):
         '''Plot survey spectrum for each PES dataframe.'''
         if not isinstance(ax_kwargs, dict):
             ax_kwargs = {}
@@ -130,6 +130,11 @@ class Pes:
             self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
             self.survey_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             self.survey_ax.invert_xaxis()
+            
+            if isinstance(save_fig,dict):
+                self.survey_fig.savefig(save_fig[key]+".svg")
+            if isinstance(save_fig,str):
+                self.survey_fig.savefig(save_fig+".svg")
     
     # stopgap solution for cases when vamas readout breaks
     @classmethod
@@ -684,7 +689,6 @@ class Pes:
             # if tight_layout:
             #     plt.tight_layout()
 
-            print(save_fig)
             if isinstance(save_fig,dict):
                 fig.savefig(save_fig[key]+".svg")
             if isinstance(save_fig,str):
