@@ -10,8 +10,87 @@ from scipy.special import wofz
 from scipy.integrate import trapezoid
 from lmfit import minimize, Parameters
 from lmfit.models import LinearModel
+from operator import itemgetter
 from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+
+
+def get_data(file, ids, be_range, dict_keys, region, shift=0, suffix=None):
+    path = [file for k in range(len(ids))]
+    if isinstance(suffix,str):
+        region = region+suffix
+    return {region: Pes.from_vamas(path, region_id=ids, be_range=be_range, dict_keys=dict_keys, shift=shift)}
+
+def process_data(file, region, blocks, dict_keys, data, n_peaks, expr_constraints=None, shifts=None, flag=None, be_range=None,
+                 plot_survey=False, fit_data=False, be_guess=None, n_samples=[5,5],
+                 peak_spacings=None, peak_ratios=None, bg_midpoint=None, ids_subset=None, suffix=None,
+                 sigma_max=1.5, gamma_max=1.5, plot_kwargs=None, **kwargs):
+    if be_range == None:
+        be_range = [0,9999]
+    ids = [k for k, s in enumerate(blocks) if region in s]
+    if Pes.is_list_or_tuple(ids_subset):
+        ids = itemgetter(*ids_subset)(ids)
+    if isinstance(shifts, dict):
+        shifts = [shifts[key] for key in dict_keys]
+    data_dict = get_data(file, ids, be_range, dict_keys, region, shift=shifts, suffix=suffix)
+    if isinstance(suffix,str):
+        region = region + suffix
+    data.update(data_dict)
+    if plot_survey:
+        if not isinstance(plot_kwargs, dict):
+            plot_kwargs = {}
+        data[region].plot_survey(**plot_kwargs)
+    if fit_data:
+        data[region].set_n_peaks(n_peaks)
+        data[region].generate_params(be_guess=be_guess, expr_constraints=expr_constraints, shirley_kwargs={'n_samples': n_samples},
+                                        sigma_max=sigma_max, gamma_max=gamma_max, match_sigma=True,
+                                        peak_spacings=peak_spacings,
+                                        peak_ratios=peak_ratios, **kwargs)
+        data[region].fit_data(bg_midpoint=bg_midpoint)
+        
+def match_spacings(peak_ids, dict_keys, expr_constraints, spacing_guess, spacing_min=None, spacing_max=None):
+    if not Pes.is_list_or_tuple(spacing_min):
+       spacing_min = [0 for k in range(len(peak_ids))]
+    if not Pes.is_list_or_tuple(spacing_max):
+       spacing_max = [np.inf for k in range(len(peak_ids))] 
+    for key in dict_keys:
+        k = 0
+        for id in peak_ids:
+            expr_constraints.update({'data_{}_p{}_center'.format(key,id): {'expr': 'data_{}_p{}_p0_spacing+data_{}_p0_center'.format(key,id,key)}})
+            if id != 0:
+                if key != dict_keys[0]:
+                    expr_constraints.update({'data_{}_p{}_p0_spacing'.format(key,id): {'expr': 'data_{}_p{}_p0_spacing'.format(dict_keys[0],id)}})
+                else:
+                    expr_constraints.update({'data_{}_p{}_p0_spacing'.format(key,id): {'value': spacing_guess[k],
+                                                                                       'min': spacing_min[k], 'max': spacing_max[k]}})
+                    k += 1
+                    
+def constrain_doublet_gamma(peak_ids, dict_keys, expr_constraints, spacing_min=None, spacing_max=None):
+    '''
+    peak_ids: list only id of first peak in doublet!
+    '''
+    if not Pes.is_list_or_tuple(spacing_min):
+       spacing_min = [0 for k in range(len(peak_ids))]
+    if not Pes.is_list_or_tuple(spacing_max):
+       spacing_max = [np.inf for k in range(len(peak_ids))] 
+    for key in dict_keys:
+        k = 0
+        for id in peak_ids:
+            expr_constraints.update({'data_{}_p{}_p{}_gamma_spacing'.format(key,id+1,id): {'value': np.average([spacing_min[k],spacing_max[k]]),
+                                                                                           'min': spacing_min[k], 'max': spacing_max[k]}})
+            expr_constraints.update({'data_{}_p{}_gamma'.format(key,id+1): {'expr': 'data_{}_p{}_p{}_gamma_spacing+data_{}_p{}_gamma'.format(key,id+1,id,key,id),
+                                                                            'min': 0}})
+            k += 1
+                    
+def gaussian_only(peak_ids, dict_keys, expr_constraints):
+    for key in dict_keys:
+        for id in peak_ids:
+            expr_constraints.update({'data_{}_p{}_gamma'.format(key,id): {'value': 0, 'vary': False}})
+            
+def align_gamma(peak_ids, dict_keys, expr_constraints, gamma_min=0, gamma_max=2):
+    for key in dict_keys[1:]:
+        for id in peak_ids:
+            expr_constraints.update({'data_{}_p{}_gamma'.format(key,id): {'expr': 'data_{}_p{}_gamma'.format(dict_keys[0],id), 'min': gamma_min, 'max': gamma_max}})
 
 # TODO improve default params
 # TODO clean up parameter specifications
