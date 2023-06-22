@@ -193,14 +193,18 @@ class Pes:
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
-    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, **kwargs):
+    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, stack_offset=0, normalize=False, norm_sample_range=None, **kwargs):
         '''Plot survey spectrum for each PES dataframe.'''
         if not isinstance(ax_kwargs, dict):
             ax_kwargs = {}
         if keys_list == None:
             keys_list = self.keys_list
-        for key in keys_list:
+        if stack_spectra:
             self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
+        i = 0
+        for key in keys_list:
+            if not stack_spectra:
+                self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
             sns.lineplot(data=self.df_dict[key], x='be', y='cps', 
                 ax=self.survey_ax, color='black', **kwargs)
             self.ax_opts(self.survey_ax, **ax_kwargs)
@@ -214,6 +218,8 @@ class Pes:
                 self.survey_fig.savefig(save_fig[key]+".svg")
             if isinstance(save_fig,str):
                 self.survey_fig.savefig(save_fig+".svg")
+                
+            i += 1
     
     # stopgap solution for cases when vamas readout breaks
     @classmethod
@@ -379,38 +385,41 @@ class Pes:
         fg = 2*sigma
         return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
     
-    def fit_data(self, lineshape="voigt", bgdata=None, shirley_kwargs=None, n_samples=None, bg_midpoint=None):
-        if bgdata == None:
-            for key in self.keys_list:
-                min_be = min(self.df_dict[key]['be'])
-                max_be = max(self.df_dict[key]['be'])
-                # print(self.df_dict[key]['be'])
-                self.df_dict[key]['bg'] = 0.0
-                if self.background == 'shirley':
-                    if not isinstance(shirley_kwargs, dict):
-                        shirley_kwargs = {}
-                    if self.is_list_or_tuple(n_samples):
-                        shirley_kwargs['n_samples'] = n_samples
-                    if self.is_float_or_int(bg_midpoint):
-                        df_lower = self.df_dict[key].loc[(self.df_dict[key]['be'] <= bg_midpoint)]
-                        df_upper = self.df_dict[key].loc[(self.df_dict[key]['be'] > bg_midpoint)]
-                        # TODO at bg_midpoint force nsamples=1
-                        bg_lower = self.calculate_shirley_background(np.array(df_lower['cps'],dtype='float64'), **shirley_kwargs)
-                        bg_upper = self.calculate_shirley_background(np.array(df_upper['cps'],dtype='float64'), **shirley_kwargs)
-                        self.df_dict[key].loc[(self.df_dict[key]['be'] <= bg_midpoint), 'bg'] = bg_lower
-                        self.df_dict[key].loc[(self.df_dict[key]['be'] > bg_midpoint), 'bg'] = bg_upper
-                    else:
-                        self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **shirley_kwargs)
-                elif self.background == 'linear':
-                    bgx = np.concatenate((self.df_dict[key]['be'][0:n_samples[0]],
-                            self.df_dict[key]['be'][-n_samples[1]:]))
-                    bgy0 = np.concatenate((self.df_dict[key]['cps'][0:n_samples[0]],
-                                self.df_dict[key]['cps'][-n_samples[1]:]))
-                    bgmodel = LinearModel(prefix="data_"+key+"_bg_")
-                    bgparams = bgmodel.make_params()
-                    bgresult = bgmodel.fit(bgy0, bgparams, x=bgx)
-                    self.df_dict[key]['bg'] = bgresult.params["data_"+key+"_bg_intercept"] + bgresult.params["data_"+key+"_bg_slope"]*self.df_dict[key]['be']
-                self.df_dict[key]['cps_no_bg'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
+    def fit_background(self, shirley_kwargs=None, n_samples=None, bg_midpoint=None):
+        for key in self.keys_list:
+            min_be = min(self.df_dict[key]['be'])
+            max_be = max(self.df_dict[key]['be'])
+            # print(self.df_dict[key]['be'])
+            self.df_dict[key]['bg'] = 0.0
+            if self.background == 'shirley':
+                if not isinstance(shirley_kwargs, dict):
+                    shirley_kwargs = {}
+                if self.is_list_or_tuple(n_samples):
+                    shirley_kwargs['n_samples'] = n_samples
+                if self.is_float_or_int(bg_midpoint):
+                    df_lower = self.df_dict[key].loc[(self.df_dict[key]['be'] <= bg_midpoint)]
+                    df_upper = self.df_dict[key].loc[(self.df_dict[key]['be'] > bg_midpoint)]
+                    # TODO at bg_midpoint force nsamples=1
+                    bg_lower = self.calculate_shirley_background(np.array(df_lower['cps'],dtype='float64'), **shirley_kwargs)
+                    bg_upper = self.calculate_shirley_background(np.array(df_upper['cps'],dtype='float64'), **shirley_kwargs)
+                    self.df_dict[key].loc[(self.df_dict[key]['be'] <= bg_midpoint), 'bg'] = bg_lower
+                    self.df_dict[key].loc[(self.df_dict[key]['be'] > bg_midpoint), 'bg'] = bg_upper
+                else:
+                    self.df_dict[key]['bg'] = self.calculate_shirley_background(self.df_dict[key]['cps'], **shirley_kwargs)
+            elif self.background == 'linear':
+                bgx = np.concatenate((self.df_dict[key]['be'][0:n_samples[0]],
+                        self.df_dict[key]['be'][-n_samples[1]:]))
+                bgy0 = np.concatenate((self.df_dict[key]['cps'][0:n_samples[0]],
+                            self.df_dict[key]['cps'][-n_samples[1]:]))
+                bgmodel = LinearModel(prefix="data_"+key+"_bg_")
+                bgparams = bgmodel.make_params()
+                bgresult = bgmodel.fit(bgy0, bgparams, x=bgx)
+                self.df_dict[key]['bg'] = bgresult.params["data_"+key+"_bg_intercept"] + bgresult.params["data_"+key+"_bg_slope"]*self.df_dict[key]['be']
+            self.df_dict[key]['cps_no_bg'] = self.df_dict[key]['cps'] - self.df_dict[key]['bg']
+    
+    def fit_data(self, lineshape="voigt", bgdata=None, fit_bg=True, shirley_kwargs=None, n_samples=None, bg_midpoint=None):
+        if fit_bg:
+            self.fit_background(shirley_kwargs=shirley_kwargs, n_samples=n_samples, bg_midpoint=bg_midpoint)
                 
         self.result = minimize(self.residual, self.params)
         
@@ -756,13 +765,13 @@ class Pes:
                             ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width)
             residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
+            self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
             if energy_axis == 'be':
                 residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
                 residual_ax.invert_xaxis() # only need to invert one axis
             elif energy_axis == 'ke':
                 residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
             residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
-            self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
             
             fig.set_size_inches(xdim,ydim)
             # if tight_layout:
@@ -777,7 +786,7 @@ class Pes:
     def ax_opts(ax, xlim=None, ylim=None, xticks=False, yticks=False, tick_direction='out',
                 major_tick_multiple=0, minor_tick_multiple=0):
         if xlim != None:
-            ax.set_xlim(xlim)
+            ax.set_xlim([min(xlim),max(xlim)])
         if ylim != None:
             ax.set_ylim(ylim)
             
