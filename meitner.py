@@ -193,7 +193,8 @@ class Pes:
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
-    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, stack_offset=0, normalize=False, norm_sample_range=None, **kwargs):
+    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, stack_offset=0, normalize=False,
+                    norm_sample_range=None, fit_bg=False, shirley_kwargs=None, n_samples=None, bg_midpoint=None, subtract_bg=False, norm_kwargs=None, colors=colors, **kwargs):
         '''Plot survey spectrum for each PES dataframe.'''
         if not isinstance(ax_kwargs, dict):
             ax_kwargs = {}
@@ -201,12 +202,28 @@ class Pes:
             keys_list = self.keys_list
         if stack_spectra:
             self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
+        if fit_bg:
+            self.fit_background(shirley_kwargs=shirley_kwargs, n_samples=n_samples, bg_midpoint=bg_midpoint)
+        if normalize:
+            if not isinstance(norm_kwargs,dict):
+                norm_kwargs = {}
+            self.normalize(**norm_kwargs)
+        if subtract_bg and fit_bg:
+            if normalize:
+                y = 'cps_no_bg_norm'
+            else:
+                y = 'cps_no_bg'
+        else:
+            y = 'cps'
         i = 0
         for key in keys_list:
             if not stack_spectra:
                 self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
-            sns.lineplot(data=self.df_dict[key], x='be', y='cps', 
-                ax=self.survey_ax, color='black', **kwargs)
+                color = 'k'
+            else:
+                color = colors[i]
+            sns.lineplot(data=self.df_dict[key], x='be', y=y, 
+                ax=self.survey_ax, color=color, **kwargs)
             self.ax_opts(self.survey_ax, **ax_kwargs)
             self.survey_fig.set_size_inches(xdim,ydim)
             self.survey_ax.set_ylabel('Intensity', fontsize=self.label_font_size)
@@ -220,6 +237,18 @@ class Pes:
                 self.survey_fig.savefig(save_fig+".svg")
                 
             i += 1
+            
+    # TODO implement sample_range
+    def normalize(self, mode='minmax', sample_range=[-np.inf,np.inf], y='cps_no_bg'):
+        for key in self.keys_list:
+            df = self.df_dict[key]
+            ymin = min(df[y])
+            if mode == 'minmax':
+                ymax = max(df[y])
+                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/(ymax-ymin)
+            if mode == 'area':
+                # need abs() due to ordering of be values
+                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/abs(trapezoid(df[y]-ymin, x=df['be']))
     
     # stopgap solution for cases when vamas readout breaks
     @classmethod
