@@ -193,8 +193,9 @@ class Pes:
         self.set_n_peaks(n_peaks)
         self.set_class_plot_config()
         
-    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, stack_offset=0, normalize=False,
-                    norm_sample_range=None, fit_bg=False, shirley_kwargs=None, n_samples=None, bg_midpoint=None, subtract_bg=False, norm_kwargs=None, colors=colors, **kwargs):
+    def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, offset=0, normalize=False, energy='be',
+                    norm_sample_range=None, fit_bg=False, shirley_kwargs=None, n_samples=None, bg_midpoint=None, subtract_bg=False, norm_kwargs=None, colors=colors,
+                    y_label='Intensity', **kwargs):
         '''Plot survey spectrum for each PES dataframe.'''
         if not isinstance(ax_kwargs, dict):
             ax_kwargs = {}
@@ -217,16 +218,18 @@ class Pes:
             y = 'cps'
         i = 0
         for key in keys_list:
+            df = self.df_dict[key]
             if not stack_spectra:
                 self.survey_fig, self.survey_ax = plt.subplots(layout="constrained")
                 color = 'k'
             else:
                 color = colors[i]
-            sns.lineplot(data=self.df_dict[key], x='be', y=y, 
-                ax=self.survey_ax, color=color, **kwargs)
+            # sns.lineplot(data=self.df_dict[key], x='be', y=y, 
+            #     ax=self.survey_ax, color=color, **kwargs)
+            self.survey_ax.plot(df[energy], df[y]+offset*i, color=color)
             self.ax_opts(self.survey_ax, **ax_kwargs)
             self.survey_fig.set_size_inches(xdim,ydim)
-            self.survey_ax.set_ylabel('Intensity', fontsize=self.label_font_size)
+            self.survey_ax.set_ylabel(y_label, fontsize=self.label_font_size)
             self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
             self.survey_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             self.survey_ax.invert_xaxis()
@@ -239,12 +242,17 @@ class Pes:
             i += 1
             
     # TODO implement sample_range
-    def normalize(self, mode='minmax', sample_range=[-np.inf,np.inf], y='cps_no_bg'):
+    def normalize(self, mode='minmax', sample_range=None, y='cps_no_bg'):
         for key in self.keys_list:
             df = self.df_dict[key]
             ymin = min(df[y])
+            ymax = max(df[y])
+            if self.is_list_or_tuple(sample_range):
+                df_trimmed = df.loc[(df['be'] <= max(sample_range)) & (df['be'] >= min(sample_range))]
+                ymin = min(df_trimmed[y])
+                ymax = max(df_trimmed[y])
+                print(ymax)
             if mode == 'minmax':
-                ymax = max(df[y])
                 self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/(ymax-ymin)
             if mode == 'area':
                 # need abs() due to ordering of be values
@@ -472,6 +480,20 @@ class Pes:
             df_key['residuals'] = self.result.residual[start_index:end_index]
             df_key['std_residuals'] = df_key['residuals']/np.std(df_key['residuals'])
             start_index = np.copy(end_index)
+        
+        # generate normalized data
+        amplitudes = []
+        j = 0
+        for key in self.keys_list:
+            norm_params = ['cps_no_bg','fit_no_bg'] + ['p{}_no_bg'.format(i) for i in range(self.n_peaks[key])]
+            amplitude = 0
+            # calculate total area by summing component areas
+            for i in range(self.n_peaks[key]):
+                amplitude += self.result.params['data_{}_p{}_amplitude'.format(key,i)].value
+            amplitudes.append(amplitude)
+            for param in norm_params:
+                self.df_dict[key][param+'_norm'] = self.df_dict[key][param]/amplitudes[j]
+            j += 1
     
     def residual(self, params, keys_list=None, lineshape="voigt", bgdata=None, *args, **kwargs):
         residuals = np.array([])
