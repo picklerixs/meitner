@@ -195,7 +195,7 @@ class Pes:
         
     def plot_survey(self, keys_list=None, xdim=3.25*4/3, ydim=3.25, ax_kwargs=None, save_fig=False, stack_spectra=False, offset=0, normalize=False, energy='be',
                     norm_sample_range=None, fit_bg=False, shirley_kwargs=None, n_samples=None, bg_midpoint=None, subtract_bg=False, norm_kwargs=None, colors=colors,
-                    y_label='Intensity', **kwargs):
+                    y_label='Intensity', label_font_size=12, tick_font_size=12, **kwargs):
         '''Plot survey spectrum for each PES dataframe.'''
         if not isinstance(ax_kwargs, dict):
             ax_kwargs = {}
@@ -229,9 +229,9 @@ class Pes:
             self.survey_ax.plot(df[energy], df[y]+offset*i, color=color)
             self.ax_opts(self.survey_ax, **ax_kwargs)
             self.survey_fig.set_size_inches(xdim,ydim)
-            self.survey_ax.set_ylabel(y_label, fontsize=self.label_font_size)
-            self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
-            self.survey_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            self.survey_ax.set_ylabel(y_label, fontsize=label_font_size)
+            self.survey_ax.set_xlabel("Binding Energy (eV)", fontsize=label_font_size)
+            self.survey_ax.tick_params(axis='both', which='major', labelsize=tick_font_size)
             self.survey_ax.invert_xaxis()
             
             if isinstance(save_fig,dict):
