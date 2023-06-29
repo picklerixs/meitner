@@ -151,7 +151,7 @@ class Processing:
         if method == 'minmax':
             norm_constant = ymax - ymin
         if method == 'area':
-            norm_constant = abs(trapezoid(ds[y] - ymin), x=ds['be'])
+            norm_constant = abs(trapezoid((ds[y] - ymin), x=ds['be']))
             
         for y in ['bg','cps','cps_no_bg']:
             ds['{}_norm'.format(y)] = (ds[y] - ymin)/norm_constant
