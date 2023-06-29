@@ -18,45 +18,64 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 class Xps:
     
-    def __init__(self, ds, **kwargs):
+    def __init__(self, 
+                 ds, 
+                 be_range=None, 
+                 method='area', 
+                 **kwargs):
         self.ds = ds
-        if 'bg' not in list(ds.data_vars):
+        # trim to be_range
+        if Aux.is_list_or_tuple(be_range):
+            self.ds = self.ds.sel(be=slice(*be_range))
+        if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
-        # if 'cps_norm' not in list(ds.data_vars):
-        #     self.normalize(**kwargs)
+        if 'cps_no_bg_norm' not in list(ds.data_vars):
+            Processing.normalize(self.ds, method=method)
         
     @classmethod
     def from_vamas(cls, **kwargs):
         return cls(Vms.import_single_vamas(**kwargs))
     
-    # # TODO add subsetting
-    # def normalize(self, method='area')
-    
-    def fit_background(self, background='shirley', **kwargs):
+    def fit_background(self,
+                       background='shirley',
+                       be_range=None,
+                       **kwargs):
         if (background == 'shirley') or (background == 's'):
             self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
+        self.ds['cps_no_bg'] = ('be', (self.ds['cps'] - self.ds['bg']).data)
 
-
-'''
-Auxiliary functions
-'''
-
+class Aux:
+    '''
+    Auxiliary methods.
+    '''
+    @classmethod
+    def return_entry(cls, x, k):
+        if cls.is_list_or_tuple(x):
+            return x[k]
+        else:
+            return x
+        
+    @staticmethod
+    def is_list_or_tuple(x):
+        return isinstance(x, list) or isinstance(x, tuple)
+    
+    @staticmethod
+    def is_float_or_int(x):
+        return isinstance(x, float) or isinstance(x, int)
+     
 class Processing:
     @staticmethod
-    def normalize(self, ds, method='minmax', sample_range=None, y='cps_no_bg'):
-        for key in self.keys_list:
-            ymin = min(df[y])
-            ymax = max(df[y])
-            if self.is_list_or_tuple(sample_range):
-                df_trimmed = df.loc[(df['be'] <= max(sample_range)) & (df['be'] >= min(sample_range))]
-                ymin = min(df_trimmed[y])
-                ymax = max(df_trimmed[y])
-                print(ymax)
-            if mode == 'minmax':
-                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/(ymax-ymin)
-            if mode == 'area':
-                # need abs() due to ordering of be values
-                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/abs(trapezoid(df[y]-ymin, x=df['be']))
+    def normalize(ds, method='area', norm_range=None, y='cps_no_bg'):
+        ymin = ds.min(dim='be')[y]
+        ymax = ds.max(dim='be')[y]
+        
+        if method == 'minmax':
+            norm_constant = ymax - ymin
+        if method == 'area':
+            norm_constant = abs(trapezoid(ds[y] - ymin), x=ds['be'])
+            
+        for y in ['bg','cps','cps_no_bg']:
+            ds['{}_norm'.format(y)] = (ds[y] - ymin)/norm_constant
 
 class Bg:
     '''
