@@ -18,145 +18,227 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 class Xps:
     
-    def __init__(self, ds):
-        '''
-        Initialize Xps data object from Xarray dataset.
-        '''
+    def __init__(self, ds, **kwargs):
         self.ds = ds
+        if 'bg' not in list(ds.data_vars):
+            self.fit_background(**kwargs)
+        # if 'cps_norm' not in list(ds.data_vars):
+        #     self.normalize(**kwargs)
         
-    def from_vamas(self, **kwargs):
-        self(import_single_vamas(**kwargs))
+    @classmethod
+    def from_vamas(cls, **kwargs):
+        return cls(Vms.import_single_vamas(**kwargs))
+    
+    # # TODO add subsetting
+    # def normalize(self, method='area')
+    
+    def fit_background(self, background='shirley', **kwargs):
+        if (background == 'shirley') or (background == 's'):
+            self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
 
 
 '''
 Auxiliary functions
 '''
 
-def check_vamas_input(path=None, vms=False):
+class Processing:
+    @staticmethod
+    def normalize(self, ds, method='minmax', sample_range=None, y='cps_no_bg'):
+        for key in self.keys_list:
+            ymin = min(df[y])
+            ymax = max(df[y])
+            if self.is_list_or_tuple(sample_range):
+                df_trimmed = df.loc[(df['be'] <= max(sample_range)) & (df['be'] >= min(sample_range))]
+                ymin = min(df_trimmed[y])
+                ymax = max(df_trimmed[y])
+                print(ymax)
+            if mode == 'minmax':
+                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/(ymax-ymin)
+            if mode == 'area':
+                # need abs() due to ordering of be values
+                self.df_dict[key]['{}_norm'.format(y)] = (df[y]-ymin)/abs(trapezoid(df[y]-ymin, x=df['be']))
+
+class Bg:
     '''
-    Check whether a path to VAMAS data is specified, a VAMAS object is passed, or an invalid input is given.
-    
-    Args:
-        path: Path to VAMAS data, including extension.
-        vms: Vamas object.
-        
-    Returns:
-        Vamas object.
+    Methods to fit backgrounds to XPS (and other) data.
     '''
-    if isinstance(path,str) and (path[-4:] == ".vms"):
-        vms = Vamas(path)
-    elif vms:
-        pass
-    else:
-        warnings.warn(
-            'Data format is not VAMAS.'
-        )
-        return
-    return vms
+    @staticmethod
+    def shirley(
+        xps: np.ndarray, eps=1e-7, max_iters=500, n_samples=(5,5)
+    ) -> np.ndarray:
+        """Core routine for calculating a Shirley background on np.ndarray data."""
+        background = np.copy(xps)
+        cumulative_xps = np.cumsum(xps, axis=0)
+        total_xps = np.sum(xps, axis=0)
+
+        rel_error = np.inf
+
+        i_left = np.mean(xps[:n_samples[0]], axis=0)
+        i_right = np.mean(xps[-n_samples[1]:], axis=0)
+
+        iter_count = 0
+
+        k = i_left - i_right
+        for iter_count in range(max_iters):
+            cumulative_background = np.cumsum(background, axis=0)
+            total_background = np.sum(background, axis=0)
+
+            new_bkg = np.copy(background)
+
+            for i in range(len(new_bkg)):
+                new_bkg[i] = i_right + k * (
+                    (total_xps - cumulative_xps[i] - (total_background - cumulative_background[i]))
+                    / (total_xps - total_background + 1e-5)
+                )
+
+            rel_error = np.abs(np.sum(new_bkg, axis=0) - total_background) / (total_background)
+
+            background = new_bkg
+
+            if np.any(rel_error < eps):
+                break
+
+        if (iter_count + 1) == max_iters:
+            warnings.warn(
+                "Shirley background calculation did not converge "
+                + "after {} steps with relative error {}!".format(max_iters, rel_error)
+            )
+            
+        return background
 
 
-def read_vamas_blocks(path=None, vms=False):
+class Vms:
     '''
-    Wrapper for Vamas() to read VAMAS block IDs.
-    If path is specified, VAMAS data are loaded.
-    Alternatively, a Vamas object (vms) can be passed directly.
-    
-    Args:
-        path: Path to VAMAS data, including extension.
-        vms: Vamas object.
-        
-    Returns:
-        List of VAMAS block IDs.
+    Methods to import and parse VAMAS data.
     '''
-    vms = check_vamas_input(path=path, vms=vms)
-    return [vms.blocks[k].block_identifier for k in range(len(vms.blocks))]
 
-
-def import_single_vamas(path=None,
-                        vms=False,
-                        region_id=None,
-                        read_phi=False):
+    @staticmethod
+    def check_vamas_input(path=None, vms=False):
         '''
-        Wrapper for Vamas() to import XPS data into an Xarray Dataset.
+        Check whether a path to VAMAS data is specified, a VAMAS object is passed, or an invalid input is given.
+        
+        Args:
+            path: Path to VAMAS data, including extension.
+            vms: Vamas object.
+            
+        Returns:
+            Vamas object.
+        '''
+        if isinstance(path,str) and (path[-4:] == ".vms"):
+            vms = Vamas(path)
+        elif vms:
+            pass
+        else:
+            warnings.warn(
+                'Data format is not VAMAS.'
+            )
+            return
+        return vms
+
+    @classmethod
+    def read_vamas_blocks(cls, path=None, vms=False):
+        '''
+        Wrapper for Vamas() to read VAMAS block IDs.
         If path is specified, VAMAS data are loaded.
         Alternatively, a Vamas object (vms) can be passed directly.
         
         Args:
             path: Path to VAMAS data, including extension.
-            region_id: Identifier for VAMAS block. Can be string (e.g., 'Au 4f 690') or integer index of block (more robust).
-                # TODO Identify when multiple VAMAS blocks share the same name and prompt user to select.
-            read_phi: If True, reads the analyzer work function from VAMAS data and factors it into the binding energy calculation.
+            vms: Vamas object.
             
         Returns:
-            Xarray dataset with variables ke (kinetic energy) and cps (raw counts) and coordinate be (binding energy).
-        
-        # ! Data processing options (normalize, shift) have been moved downstream.
+            List of VAMAS block IDs.
         '''
+        vms = cls.check_vamas_input(path=path, vms=vms)
+        return [vms.blocks[k].block_identifier for k in range(len(vms.blocks))]
 
-        vms = check_vamas_input(path=path, vms=vms)
-
-        # check spectra contained in VAMAS by pulling block_identifier for each block
-        ids = read_vamas_blocks(vms=vms)
-        n = len(ids)
-        
-        print('Found ' + str(len(ids)) + ' blocks.')
-        print()
-        
-        # check for and log duplicate block IDs
-        duplicate_flag = n != len(set(ids))
-        if duplicate_flag:
-            print('Detected multiple VAMAS blocks with the same name.')
-            print()
-            duplicate_ids = [id for id in ids if ids.count(id) > 1]
-        
-        # if region_id not specified, get user input
-        if (region_id == None) or (not region_id):
-            print(pd.DataFrame(ids, columns=['id']))
-            region_id = input('Specify block ID or index to access...')
-            try:
-                region_id = int(region_id)
-            except ValueError:
-                pass
-        
-        # block index specified directly
-        if isinstance(region_id, int):
-            idx = region_id
-        # get block index from block ID
-        elif isinstance(region_id, str):
-            if region_id in duplicate_ids:
-                print('String specification is ambiguous.')
-                print('Defaulting to first instance.')
-            idx = ids.index(region_id)
+    @classmethod
+    def import_single_vamas(cls,
+                            path=None,
+                            vms=False,
+                            region_id=None,
+                            read_phi=False):
+            '''
+            Wrapper for Vamas() to import XPS data into an Xarray Dataset.
+            If path is specified, VAMAS data are loaded.
+            Alternatively, a Vamas object (vms) can be passed directly.
             
-        # access spectrum, pull counts (c), generate KE range, and calculate BE from KE
-        dataBlock = vms.blocks[idx]
-        cps = dataBlock.corresponding_variables[0].y_values # ! assumes counts are always the first corresponding variable...
-        n = len(cps)
-        ke = np.linspace(dataBlock.x_start, dataBlock.x_start + dataBlock.x_step*(n-1), n)
-        
-        # analyzer work function
-        if read_phi:
-            phi = dataBlock.analyzer_work_function_or_acceptance_energy
-        else:
-            phi = 0
-        # excitation energy
-        hv = dataBlock.analysis_source_characteristic_energy
-        print("Excitation energy:")
-        print(str(hv) + " eV")
+            Args:
+                path: Path to VAMAS data, including extension.
+                region_id: Identifier for VAMAS block. Can be string (e.g., 'Au 4f 690') or integer index of block (more robust).
+                    # TODO Identify when multiple VAMAS blocks share the same name and prompt user to select.
+                read_phi: If True, reads the analyzer work function from VAMAS data and factors it into the binding energy calculation.
+                
+            Returns:
+                Xarray dataset with variables ke (kinetic energy) and cps (raw counts) and coordinate be (binding energy).
+            
+            # ! Data processing options (normalize, shift) have been moved downstream.
+            '''
 
-        
-        # compute binding energy
-        be = hv - ke - phi
-        
-        return xr.Dataset(
-            data_vars=dict(
-                cps=('be', cps),
-                ke=('be', ke)
-            ),
-            coords=dict(
-                be=('be', be)
+            vms = cls.check_vamas_input(path=path, vms=vms)
+
+            # check spectra contained in VAMAS by pulling block_identifier for each block
+            ids = cls.read_vamas_blocks(vms=vms)
+            n = len(ids)
+            
+            print('Found ' + str(len(ids)) + ' blocks.')
+            print()
+            
+            # check for and log duplicate block IDs
+            duplicate_flag = n != len(set(ids))
+            if duplicate_flag:
+                print('Detected multiple VAMAS blocks with the same name.')
+                print()
+                duplicate_ids = [id for id in ids if ids.count(id) > 1]
+            
+            # if region_id not specified, get user input
+            if (region_id == None) or (not region_id):
+                print(pd.DataFrame(ids, columns=['id']))
+                region_id = input('Specify block ID or index to access...')
+                try:
+                    region_id = int(region_id)
+                except ValueError:
+                    pass
+            
+            # block index specified directly
+            if isinstance(region_id, int):
+                idx = region_id
+            # get block index from block ID
+            elif isinstance(region_id, str):
+                if region_id in duplicate_ids:
+                    print('String specification is ambiguous.')
+                    print('Defaulting to first instance.')
+                idx = ids.index(region_id)
+                
+            # access spectrum, pull counts (c), generate KE range, and calculate BE from KE
+            dataBlock = vms.blocks[idx]
+            cps = dataBlock.corresponding_variables[0].y_values # ! assumes counts are always the first corresponding variable...
+            n = len(cps)
+            ke = np.linspace(dataBlock.x_start, dataBlock.x_start + dataBlock.x_step*(n-1), n)
+            
+            # analyzer work function
+            if read_phi:
+                phi = dataBlock.analyzer_work_function_or_acceptance_energy
+            else:
+                phi = 0
+            # excitation energy
+            hv = dataBlock.analysis_source_characteristic_energy
+            print("Excitation energy:")
+            print(str(hv) + " eV")
+
+            
+            # compute binding energy
+            be = hv - ke - phi
+            
+            return xr.Dataset(
+                data_vars=dict(
+                    cps=('be', cps),
+                    ke=('be', ke)
+                ),
+                coords=dict(
+                    be=('be', be)
+                )
             )
-        )
         
         
 '''
