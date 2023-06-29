@@ -16,21 +16,101 @@ from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 
+class Fit:
+    
+    def __init___(self, xps_list, dict_keys=None):
+        '''
+        Args:
+            xps_list: list or dict of Xps objects
+            dict_keys: list of keys corresponding to elements in xps_list
+        '''
+        # default syntax for keys is di where i = Xps object index
+        if not Aux.is_list_or_tuple(dict_keys):
+            self.dict_keys = ['d{}'.format(i) for i in range(len(xps_list))]
+        if isinstance(xps_list, dict):
+            self.dict_keys = list(xps_list.keys())
+        # ensure xps_list is dict
+        elif Aux.is_tuple_or_list(xps_list):
+            xps_list = dict(zip(dict_keys, xps_list))
+        self.xps_list = xps_list
+        
+        # consolidate parameters
+        self.params = Parameters()
+        # add prefix from dict_keys to each parameter
+        for dk in self.dict_keys:
+            xps_list_dk = self.xps_list[dk]
+            params_dk = xps_list_dk.params
+            params_keys = list(params_dk.keys())
+            for pk in params_keys:
+                params_dk['{}_{}'.format(dk,pk)] = params_dk.pop(pk)
+            self.params.add(params_dk)
+        
+    @staticmethod
+    def generate_params(params,
+                        be_guess=None,
+                        lineshape='voigt',
+                        peak_ratios=None,
+                        peak_spacings=None,
+                        expr_constraints=None,
+                        dict_keys=None):
+        return
+    
+    @classmethod
+    def generate_doublet(cls, params, peak_ids, ratio=0.5, splitting=1, dict_keys=None):
+        '''
+        Args:
+            params: Parameters object
+            peak_ids: list of pairs of peaks to create as doublets
+            ratio: doublet type ('p','d','f') or manual specification (float or int)
+            splitting: doublet splitting
+        '''
+        if not Aux.is_list_or_tuple(ratio):
+            ratio = [ratio]
+        cls.constrain_peak_ratios(params, peak_ids, ratio, dict_keys=dict_keys)
+        
+    
+    @staticmethod
+    def constrain_peak_ratios(params, peak_ids, ratio, dict_keys=None):
+        '''
+        Args:
+            params: Parameters object
+            peak_ids: list of pairs of peaks to be constrained
+        '''
+        if Aux.is_float_or_int(peak_ids[0]):
+            peak_ids = [peak_ids]
+        if not Aux.is_tuple_or_list(dict_keys):
+            dict_keys = []
+        for dk in dict_keys:
+            for i in range(len(peak_ids)):
+                peak_ids_i = peak_ids[i]
+                if Aux.is_tuple_or_list(ratio):
+                    ratio_i = ratio[i]
+                elif Aux.is_float_or_int(ratio):
+                    ratio_i = ratio
+                params.add('{}_p{}_p{}_ratio'.format(dk,peak_ids_i[1],peak_ids_i[0]), value=ratio_i, vary=False)
+            
+    
+    
+
 class Xps:
     
     def __init__(self, 
                  ds, 
+                 n_peaks=1,
                  be_range=None, 
                  method='area', 
                  **kwargs):
         self.ds = ds
-        # trim to be_range
+        self.n_peaks = n_peaks
+        # preprocessing
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
         if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
         if 'cps_no_bg_norm' not in list(ds.data_vars):
             Processing.normalize(self.ds, method=method)
+        # 
+        self.params = Parameters()
         
     @classmethod
     def from_vamas(cls, **kwargs):
@@ -38,7 +118,6 @@ class Xps:
     
     def fit_background(self,
                        background='shirley',
-                       be_range=None,
                        **kwargs):
         if (background == 'shirley') or (background == 's'):
             self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
