@@ -42,7 +42,7 @@ class Fit:
             params_dk = xps_list_dk.params
             params_keys = list(params_dk.keys())
             if len(params_keys) == 0:
-                print('Parameters instance of object {} is empty.'.format(dk))
+                print('Parameters instance of {} is empty.'.format(dk))
             else:
                 for pk in params_keys:
                     params_dk['{}_{}'.format(dk,pk)] = params_dk.pop(pk)
@@ -58,39 +58,165 @@ class Fit:
                         dict_keys=None):
         return
     
-    @classmethod
-    def generate_doublet(cls, params, peak_ids, ratio=0.5, splitting=1, dict_keys=None):
-        '''
-        Args:
-            params: Parameters object
-            peak_ids: list of pairs of peaks to create as doublets
-            ratio: doublet type ('p','d','f') or manual specification (float or int)
-            splitting: doublet splitting
-        '''
-        if not Aux.is_list_or_tuple(ratio):
-            ratio = [ratio]
-        cls.constrain_peak_ratios(params, peak_ids, ratio, dict_keys=dict_keys)
-        
-    
     @staticmethod
-    def constrain_peak_ratios(params, peak_ids, ratio, dict_keys=None):
+    def constrain_parameter_pair(params,
+                                 spec='ratio',
+                                 param_id='amplitude',
+                                 peak_ids=[1,0],
+                                 value=1,
+                                 dict_keys=None,
+                                 vary=False,
+                                 min=0,
+                                 max=np.inf):
         '''
+        For each pair of peaks in peak_ids, constrain the ratio or spacing of the specified parameter (param_id).
+        For each pair [a,b], generates a new parameter with name pa_pb_[param_id]_[type].
+        For peak a, the parameter expression is either:
+            pa_[param_id] = pa_pb_[param_id]_ratio * pb_[param_id]
+            pa_[param_id] = pa_pb_[param_id]_spacing + pb_[param_id]
+        
         Args:
             params: Parameters object
-            peak_ids: list of pairs of peaks to be constrained
+            spec: 'ratio' or 'spacing'
+            param_id: id of parameter to be constrained
+            peak_ids: list of pairs of peaks to be constrained.
+            value: single constraint value for all pairs or list of values for each pair
         '''
-        if Aux.is_float_or_int(peak_ids[0]):
-            peak_ids = [peak_ids]
+        if spec == 'ratio':
+            op = '*'
+        elif spec == 'spacing':
+            op = '+'
+        peak_ids = Aux.encapsulate(peak_ids)
+        # TODO ensure this will work for constraining peaks across multiple Xps instances
         if not Aux.is_list_or_tuple(dict_keys):
-            dict_keys = []
+            dict_keys = [None]
+        else:
+            if not Aux.is_list_or_tuple(value):
+                value = [value for _ in range(len(peak_ids))]
         for dk in dict_keys:
+            # prefix to append to parameter names
+            # ignored if dict_keys not specified
+            if dk == None:
+                prefix_dk = ''
+            else:
+                prefix_dk = '{}_'.format(dk)
+            # add constraint
             for i in range(len(peak_ids)):
                 peak_ids_i = peak_ids[i]
-                if Aux.is_list_or_tuple(ratio):
-                    ratio_i = ratio[i]
-                elif Aux.is_float_or_int(ratio):
-                    ratio_i = ratio
-                params.add('{}_p{}_p{}_ratio'.format(dk,peak_ids_i[1],peak_ids_i[0]), value=ratio_i, vary=False)
+                value_i = value[i]
+                # generate ratio parameter
+                params.add('{}p{}_p{}_{}_{}'.format(prefix_dk,peak_ids_i[0],peak_ids_i[1],param_id,spec),
+                           value=value_i, 
+                           vary=vary,
+                           min=min,
+                           max=max)
+                # redefine parameter expression
+                params.add('{}p{}_{}'.format(prefix_dk,peak_ids_i[0],param_id), 
+                           expr='{}p{}_p{}_{}_{} {} {}p{}_{}'.format(prefix_dk,peak_ids_i[0],peak_ids_i[1],param_id,spec,
+                                                                     op,
+                                                                     prefix_dk,peak_ids_i[1],param_id))
+                
+    @classmethod
+    def constrain_ratio(cls, params, **kwargs):
+        '''Wrapper for constrain_parameter_pair() to constrain peak ratios.'''
+        cls.constrain_parameter_pair(params, spec='ratio', param_id='amplitude' **kwargs)
+        
+    @classmethod
+    def constrain_spacing(cls, params, **kwargs):
+        '''Wrapper for constrain_parameter_pair() to constrain peak spacings.'''
+        cls.constrain_parameter_pair(params, spec='spacing', param_id='center', **kwargs)
+    
+    @classmethod
+    def constrain_doublet(cls, 
+                          params,
+                          peak_ids=[1,0],
+                          ratio=0.5,
+                          splitting=1,
+                          dict_keys=None,
+                          constrain_gamma=True):
+        '''
+        Constrains one pair of doublet peaks. Wrapper for constrain_parameter_pair().
+        
+        Args:
+            params: Parameters object
+            peak_ids: pair of peaks to be constrained
+            ratio: doublet type ('p','d','f') or manual specification (float or int)
+            splitting: doublet splitting
+            constrain_gamma: if True, gamma of the higher-binding energy peak will be 
+                greater than that of the lower-energy peak. If 'match', gamma will be
+                the same for both peaks.
+        '''
+        if ratio == 'p':
+            ratio = 0.5
+        elif ratio == 'd':
+            ratio = 2/3
+        elif ratio == 'f':
+            ratio = 3/4
+            
+        cls.constrain_ratio(params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
+        cls.constrain_spacing(params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
+        
+        if constrain_gamma:
+            cls.constrain_parameter_pair(params, 
+                                         spec='spacing',
+                                         param_id='gamma',
+                                         peak_ids=peak_ids,
+                                         value=0,
+                                         dict_keys=dict_keys,
+                                         vary=True,
+                                         min=0,
+                                         max=np.inf)
+        elif constrain_gamma == 'match':
+            cls.constrain_parameter_pair(params, 
+                                         spec='spacing',
+                                         param_id='gamma',
+                                         peak_ids=peak_ids,
+                                         value=0,
+                                         dict_keys=dict_keys,
+                                         vary=False)
+            
+    @classmethod
+    def init_peak(cls, params, peak_id, lineshape='voigt', dict_keys=None):
+        '''Initializes parameters for a single peak.'''
+        if not Aux.is_list_or_tuple(dict_keys):
+            dict_keys = [None]
+            
+        param_ids = ['center', 'amplitude']
+            
+        if lineshape == 'voigt':
+            voigt_param_ids = ['sigma', 'gamma']
+            param_ids += voigt_param_ids
+            params._asteval.symtable['calculate_voigt_fwhm'] = Fn.calculate_voigt_fwhm
+            
+        
+        for dk in dict_keys:
+            # prefix to append to parameter names
+            # ignored if dict_keys not specified
+            if dk == None:
+                prefix_dk = ''
+            else:
+                prefix_dk = '{}_'.format(dk)
+                
+            prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
+            # TODO consolidate loops and logic...
+            for param_ids_i in param_ids:
+                params.add(prefix_dk+param_ids_i)
+            for param_ids_i in param_ids:
+                if lineshape == 'voigt':
+                    params.add(prefix_dk + 'fwhm',
+                               expr="calculate_voigt_fwhm("+prefix_dk+"sigma,"+prefix_dk+"gamma)")
+                
+            
+                
+    @classmethod
+    def init_peaks(cls, params, n_peaks, **kwargs):
+        '''Wrapper for init_peak to initialize multiple peaks.'''
+        for i in range(n_peaks):
+            cls.init_peak(params, i, **kwargs)
+                
+    @staticmethod
+    def constrain_gaussian_width(params, peak_ids):
+        return
             
     
 class Fn:
@@ -113,6 +239,13 @@ class Fn:
         voigtfunction = np.sqrt(np.log(2))/(sigma*np.sqrt(np.pi)) * wofz((x-center)/sigma * np.sqrt(np.log(2)) + 1j * gamma/sigma * np.sqrt(np.log(2))).real
         return voigtfunction*amplitude
     
+    @staticmethod
+    # borrowed from Andreas Seibert
+    def calculate_voigt_fwhm(sigma, gamma):
+        fl = 2*gamma
+        fg = 2*sigma
+        return fl/2 + np.sqrt(np.power(fl,2)/4 + np.power(fg,2))
+    
 
 class Xps:
     
@@ -133,6 +266,7 @@ class Xps:
             Processing.normalize(self.ds, method=method)
         # 
         self.params = Parameters()
+        Fit.init_peaks(self.params, n_peaks, lineshape='voigt', dict_keys=None)
         
     @classmethod
     def from_vamas(cls, **kwargs):
@@ -163,6 +297,13 @@ class Aux:
     @staticmethod
     def is_float_or_int(x):
         return isinstance(x, float) or isinstance(x, int)
+    
+    @classmethod
+    def encapsulate(cls, x):
+        if cls.is_float_or_int(x[0]):
+            return [x]
+        else:
+            return x
      
 class Processing:
     @staticmethod
