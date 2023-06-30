@@ -18,7 +18,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 class Fit:
     
-    def __init___(self, xps_list, dict_keys=None):
+    def __init__(self, xps_list, dict_keys=None):
         '''
         Args:
             xps_list: list or dict of Xps objects
@@ -30,8 +30,8 @@ class Fit:
         if isinstance(xps_list, dict):
             self.dict_keys = list(xps_list.keys())
         # ensure xps_list is dict
-        elif Aux.is_tuple_or_list(xps_list):
-            xps_list = dict(zip(dict_keys, xps_list))
+        elif Aux.is_list_or_tuple(xps_list):
+            xps_list = dict(zip(self.dict_keys, xps_list))
         self.xps_list = xps_list
         
         # consolidate parameters
@@ -41,9 +41,12 @@ class Fit:
             xps_list_dk = self.xps_list[dk]
             params_dk = xps_list_dk.params
             params_keys = list(params_dk.keys())
-            for pk in params_keys:
-                params_dk['{}_{}'.format(dk,pk)] = params_dk.pop(pk)
-            self.params.add(params_dk)
+            if len(params_keys) == 0:
+                print('Parameters instance of object {} is empty.'.format(dk))
+            else:
+                for pk in params_keys:
+                    params_dk['{}_{}'.format(dk,pk)] = params_dk.pop(pk)
+                self.params.add(params_dk)
         
     @staticmethod
     def generate_params(params,
@@ -78,18 +81,37 @@ class Fit:
         '''
         if Aux.is_float_or_int(peak_ids[0]):
             peak_ids = [peak_ids]
-        if not Aux.is_tuple_or_list(dict_keys):
+        if not Aux.is_list_or_tuple(dict_keys):
             dict_keys = []
         for dk in dict_keys:
             for i in range(len(peak_ids)):
                 peak_ids_i = peak_ids[i]
-                if Aux.is_tuple_or_list(ratio):
+                if Aux.is_list_or_tuple(ratio):
                     ratio_i = ratio[i]
                 elif Aux.is_float_or_int(ratio):
                     ratio_i = ratio
                 params.add('{}_p{}_p{}_ratio'.format(dk,peak_ids_i[1],peak_ids_i[0]), value=ratio_i, vary=False)
             
     
+class Fn:
+    
+    @staticmethod
+    def gaussian(x, amplitude, center, sigma):
+        return (amplitude/(sigma*np.sqrt(2*np.pi)))*np.exp(-0.5*((x-center)/sigma)**2)
+
+    @staticmethod
+    def lorentzian(x, amplitude, center, sigma):
+        return amplitude*sigma/(np.pi*((x-center)**2+sigma**2))
+
+    @classmethod
+    def pseudo_voigt(cls, x, amplitude, center, sigma, fraction):
+        return (1-fraction)*cls.gaussian(x,amplitude,center,sigma/np.sqrt(2*np.log(2))) + fraction*cls.lorentzian(x,amplitude,center,sigma)
+
+    @staticmethod
+    # borrowed from Andreas Seibert
+    def voigt(x, amplitude, center, sigma, gamma):
+        voigtfunction = np.sqrt(np.log(2))/(sigma*np.sqrt(np.pi)) * wofz((x-center)/sigma * np.sqrt(np.log(2)) + 1j * gamma/sigma * np.sqrt(np.log(2))).real
+        return voigtfunction*amplitude
     
 
 class Xps:
@@ -125,7 +147,7 @@ class Xps:
 
 class Aux:
     '''
-    Auxiliary methods.
+    Aux methods.
     '''
     @classmethod
     def return_entry(cls, x, k):
@@ -161,6 +183,7 @@ class Bg:
     Methods to fit backgrounds to XPS (and other) data.
     '''
     @staticmethod
+    # stolen from pyARPES
     def shirley(
         xps: np.ndarray, eps=1e-7, max_iters=500, n_samples=(5,5)
     ) -> np.ndarray:
