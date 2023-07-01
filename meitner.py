@@ -33,10 +33,18 @@ class Fit:
             dict_keys: list of keys corresponding to elements in xps_list
         '''
         # ensure xps is iterable
-        xps = Aux.encapsulate(xps)
+        if Aux.is_float_or_int(xps):
+            xps = [xps]
         self.xps = xps
         len_xps = len(self.xps)
+        print(len_xps)
+        # ensure n_peaks is iterable
+        if Aux.is_float_or_int(n_peaks):
+            n_peaks = [n_peaks for _ in range(len_xps)]
         self.n_peaks = n_peaks
+        if Aux.is_float_or_int(first_peak_index):
+            first_peak_index = [first_peak_index for _ in range(len_xps)]
+        self.first_peak_index = first_peak_index
 
         # read or create dict_keys
         if Aux.is_list_or_tuple(dict_keys):
@@ -46,19 +54,56 @@ class Fit:
             self.dict_keys = list(self.xps.keys())
         # default fallback: di where i = Xps object index
         else:
-            self.dict_keys = ['d{}'.format(i) for i in range(len(xps))]
+            self.dict_keys = ['d{}'.format(i) for i in range(len_xps)]
 
         # ensure xps is dict
         if Aux.is_list_or_tuple(self.xps):
             self.xps = dict(zip(self.dict_keys, self.xps))
-        
+        print(self.dict_keys)
         # initialize parameters
         self.params = Parameters()
         self.init_peaks(self.params, 
                         n_peaks=self.n_peaks,
                         lineshape=lineshape,
-                        first_peak_index=first_peak_index,
+                        first_peak_index=self.first_peak_index,
                         dict_keys=self.dict_keys)
+        self.guess_multi_component(self.params,
+                                   param_id='center',
+                                   dict_keys=self.dict_keys)
+        
+    @classmethod
+    def guess_multi_component(cls, params, param_id='center', peak_ids=0, value=0, min=0, max=np.inf, dict_keys=None):
+        if dict_keys is None:
+            dict_keys = ['']
+        elif not Aux.is_list_or_tuple(dict_keys):
+            dict_keys = [dict_keys]
+        if Aux.is_float_or_int(peak_ids):
+            peak_ids = [peak_ids]
+        len_peak_ids = len(peak_ids)
+        if Aux.is_float_or_int(value):
+            value = [value for _ in range(len_peak_ids)]
+        if Aux.is_float_or_int(min):
+            min = [min for _ in range(len_peak_ids)]
+        if Aux.is_float_or_int(max):
+            max = [max for _ in range(len_peak_ids)]
+
+        for dk in dict_keys:
+            for i in range(len_peak_ids):
+                prefix = '{}_p{}'.format(dk,peak_ids[i])
+                cls.guess_component_parameter(params, 
+                                              param_id=param_id,
+                                              value=value[i],
+                                              min=min[i],
+                                              max=max[i],
+                                              prefix=prefix)
+        
+    @staticmethod
+    def guess_component_parameter(params, param_id='center', value=0, min=0, max=np.inf, prefix=None, **kwargs):
+        if prefix is None:
+            prefix_dk = ''
+        else:
+            prefix_dk = '{}_'.format(prefix)
+        params[prefix_dk+param_id].set(value=value, min=min, max=max, **kwargs)
         
     @staticmethod
     def generate_params(params,
