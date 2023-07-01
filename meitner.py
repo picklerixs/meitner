@@ -18,35 +18,47 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 class Fit:
     
-    def __init__(self, xps_list, dict_keys=None):
+    def __init__(self, 
+                 xps,
+                 n_peaks=1,
+                 lineshape='voigt',
+                 first_peak_index=0,
+                 dict_keys=None):
         '''
         Args:
-            xps_list: list or dict of Xps objects
+            xps: Xps instance or list or dict of Xps instances
+            n_peaks: single specification for number of peaks or list of len(xps)
+            first_peak_index: starting index for peak IDs, either single specification
+                or list of len(xps)
             dict_keys: list of keys corresponding to elements in xps_list
         '''
-        # default syntax for keys is di where i = Xps object index
-        if not Aux.is_list_or_tuple(dict_keys):
-            self.dict_keys = ['d{}'.format(i) for i in range(len(xps_list))]
-        if isinstance(xps_list, dict):
-            self.dict_keys = list(xps_list.keys())
-        # ensure xps_list is dict
-        elif Aux.is_list_or_tuple(xps_list):
-            xps_list = dict(zip(self.dict_keys, xps_list))
-        self.xps_list = xps_list
+        # ensure xps is iterable
+        xps = Aux.encapsulate(xps)
+        self.xps = xps
+        len_xps = len(self.xps)
+        self.n_peaks = n_peaks
+
+        # read or create dict_keys
+        if Aux.is_list_or_tuple(dict_keys):
+            self.dict_keys = dict_keys
+        # if dict_keys not specified, try reading from xps
+        elif isinstance(self.xps, dict):
+            self.dict_keys = list(self.xps.keys())
+        # default fallback: di where i = Xps object index
+        else:
+            self.dict_keys = ['d{}'.format(i) for i in range(len(xps))]
+
+        # ensure xps is dict
+        if Aux.is_list_or_tuple(self.xps):
+            self.xps = dict(zip(self.dict_keys, self.xps))
         
-        # consolidate parameters
+        # initialize parameters
         self.params = Parameters()
-        # add prefix from dict_keys to each parameter
-        for dk in self.dict_keys:
-            xps_list_dk = self.xps_list[dk]
-            params_dk = xps_list_dk.params
-            params_keys = list(params_dk.keys())
-            if len(params_keys) == 0:
-                print('Parameters instance of {} is empty.'.format(dk))
-            else:
-                for pk in params_keys:
-                    params_dk['{}_{}'.format(dk,pk)] = params_dk.pop(pk)
-                self.params.add(params_dk)
+        self.init_peaks(self.params, 
+                        n_peaks=self.n_peaks,
+                        lineshape=lineshape,
+                        first_peak_index=first_peak_index,
+                        dict_keys=self.dict_keys)
         
     @staticmethod
     def generate_params(params,
@@ -176,11 +188,8 @@ class Fit:
                                          vary=False)
             
     @classmethod
-    def init_peak(cls, params, peak_id, lineshape='voigt', dict_keys=None):
+    def init_peak(cls, params, peak_id, lineshape='voigt', prefix=None):
         '''Initializes parameters for a single peak.'''
-        if not Aux.is_list_or_tuple(dict_keys):
-            dict_keys = [None]
-            
         param_ids = ['center', 'amplitude']
             
         if lineshape == 'voigt':
@@ -188,31 +197,40 @@ class Fit:
             param_ids += voigt_param_ids
             params._asteval.symtable['calculate_voigt_fwhm'] = Fn.calculate_voigt_fwhm
             
-        
-        for dk in dict_keys:
-            # prefix to append to parameter names
-            # ignored if dict_keys not specified
-            if dk == None:
-                prefix_dk = ''
-            else:
-                prefix_dk = '{}_'.format(dk)
-                
-            prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
-            # TODO consolidate loops and logic...
-            for param_ids_i in param_ids:
-                params.add(prefix_dk+param_ids_i)
-            for param_ids_i in param_ids:
-                if lineshape == 'voigt':
-                    params.add(prefix_dk + 'fwhm',
-                               expr="calculate_voigt_fwhm("+prefix_dk+"sigma,"+prefix_dk+"gamma)")
+        if prefix == None:
+            prefix_dk = ''
+        else:
+            prefix_dk = '{}_'.format(prefix)
+            
+        prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
+        # TODO consolidate loops and logic...
+        for param_ids_i in param_ids:
+            params.add(prefix_dk+param_ids_i)
+        for param_ids_i in param_ids:
+            if lineshape == 'voigt':
+                params.add(prefix_dk + 'fwhm',
+                            expr="calculate_voigt_fwhm("+prefix_dk+"sigma,"+prefix_dk+"gamma)")
                 
             
                 
     @classmethod
-    def init_peaks(cls, params, n_peaks, **kwargs):
+    def init_peaks(cls, params, n_peaks=1, lineshape='voigt', first_peak_index=0, dict_keys=None):
         '''Wrapper for init_peak to initialize multiple peaks.'''
-        for i in range(n_peaks):
-            cls.init_peak(params, i, **kwargs)
+        # if no spec for dict_keys, assume only one dataset
+        if dict_keys is None:
+            dict_keys = ['']
+        len_dict_keys = len(dict_keys)
+        # ensure n_peaks is iterable
+        if Aux.is_float_or_int(n_peaks):
+            n_peaks = [n_peaks for _ in range(len_dict_keys)]
+        # ensure first_peak_index is iterable
+        if Aux.is_float_or_int(first_peak_index):
+            first_peak_index = [first_peak_index for _ in range(len_dict_keys)]
+        # initialize parameters
+        for i in range(len_dict_keys):
+            dk = dict_keys[i]
+            for peak_id in range(first_peak_index[i],n_peaks[i],1):
+                cls.init_peak(params, peak_id, lineshape=lineshape, prefix=dk)
                 
     @staticmethod
     def constrain_gaussian_width(params, peak_ids):
@@ -251,12 +269,10 @@ class Xps:
     
     def __init__(self, 
                  ds, 
-                 n_peaks=1,
                  be_range=None, 
                  method='area', 
                  **kwargs):
         self.ds = ds
-        self.n_peaks = n_peaks
         # preprocessing
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
@@ -264,9 +280,6 @@ class Xps:
             self.fit_background(**kwargs)
         if 'cps_no_bg_norm' not in list(ds.data_vars):
             Processing.normalize(self.ds, method=method)
-        # 
-        self.params = Parameters()
-        Fit.init_peaks(self.params, n_peaks, lineshape='voigt', dict_keys=None)
         
     @classmethod
     def from_vamas(cls, **kwargs):
