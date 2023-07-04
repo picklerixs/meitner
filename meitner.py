@@ -127,10 +127,11 @@ class Fit:
                                  max=np.inf):
         '''
         For each pair of peaks in peak_ids, constrain the ratio or spacing of the specified parameter (param_id).
-        For each pair [a,b], generates a new parameter with name pa_pb_[param_id]_[type].
+        For each pair [a,b], generates a new parameter with name dk_pa_pb_[param_id]_[type].
         For peak a, the parameter expression is either:
-            pa_[param_id] = pa_pb_[param_id]_ratio * pb_[param_id]
-            pa_[param_id] = pa_pb_[param_id]_spacing + pb_[param_id]
+            dk_pa_[param_id] = pa_pb_[param_id]_ratio * pb_[param_id]
+            dk_pa_[param_id] = pa_pb_[param_id]_spacing + pb_[param_id]
+        where dk is an entry in dict_keys.
         
         Args:
             params: Parameters object
@@ -210,28 +211,28 @@ class Fit:
         elif ratio == 'f':
             ratio = 3/4
             
+        # constrain peak ratio and spacing
         cls.constrain_ratio(params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
         cls.constrain_spacing(params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
         
-        if constrain_gamma:
+        if not constrain_gamma:
+            pass
+        else:
+            if constrain_gamma == 'match':
+                vary_gamma = False
+            else:
+                vary_gamma = True
             cls.constrain_parameter_pair(params, 
-                                         spec='spacing',
-                                         param_id='gamma',
-                                         peak_ids=peak_ids,
-                                         value=0,
-                                         dict_keys=dict_keys,
-                                         vary=True,
-                                         min=0,
-                                         max=np.inf)
-        elif constrain_gamma == 'match':
-            cls.constrain_parameter_pair(params, 
-                                         spec='spacing',
-                                         param_id='gamma',
-                                         peak_ids=peak_ids,
-                                         value=0,
-                                         dict_keys=dict_keys,
-                                         vary=False)
-            
+                                            spec='spacing',
+                                            param_id='gamma',
+                                            peak_ids=peak_ids,
+                                            value=0,
+                                            dict_keys=dict_keys,
+                                            vary=vary_gamma,
+                                            min=0,
+                                            max=np.inf)
+
+
     @classmethod
     def init_peak(cls, params, peak_id, lineshape='voigt', prefix=None):
         '''Initializes parameters for a single peak.'''
