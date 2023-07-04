@@ -62,17 +62,25 @@ class Fit:
         print(self.dict_keys)
         # initialize parameters
         self.params = Parameters()
-        self.init_peaks(self.params, 
+        self.init_peaks(params=self.params, 
                         n_peaks=self.n_peaks,
                         lineshape=lineshape,
                         first_peak_index=self.first_peak_index,
                         dict_keys=self.dict_keys)
-        self.guess_multi_component(self.params,
+        self.guess_multi_component(params=self.params,
                                    param_id='center',
                                    dict_keys=self.dict_keys)
         
-    @classmethod
-    def guess_multi_component(cls, params, param_id='center', peak_ids=0, value=0, min=0, max=np.inf, dict_keys=None):
+    def guess_multi_component(self, 
+                              params=None, 
+                              param_id='center', 
+                              peak_ids=0, 
+                              value=0, 
+                              min=0, 
+                              max=np.inf, 
+                              dict_keys=None):
+        if params is None:
+            params = self.params
         if dict_keys is None:
             dict_keys = ['']
         elif not Aux.is_list_or_tuple(dict_keys):
@@ -90,23 +98,31 @@ class Fit:
         for dk in dict_keys:
             for i in range(len_peak_ids):
                 prefix = '{}_p{}'.format(dk,peak_ids[i])
-                cls.guess_component_parameter(params, 
+                self.guess_component_parameter(params=self.params, 
                                               param_id=param_id,
                                               value=value[i],
                                               min=min[i],
                                               max=max[i],
                                               prefix=prefix)
         
-    @staticmethod
-    def guess_component_parameter(params, param_id='center', value=0, min=0, max=np.inf, prefix=None, **kwargs):
+    def guess_component_parameter(self,
+                                  params=None, 
+                                  param_id='center', 
+                                  value=0, 
+                                  min=0, 
+                                  max=np.inf, 
+                                  prefix=None, 
+                                  **kwargs):
+        if params is None:
+            params = self.params
         if prefix is None:
             prefix_dk = ''
         else:
             prefix_dk = '{}_'.format(prefix)
         params[prefix_dk+param_id].set(value=value, min=min, max=max, **kwargs)
         
-    @staticmethod
-    def generate_params(params,
+    def generate_params(self,
+                        params=None,
                         be_guess=None,
                         lineshape='voigt',
                         peak_ratios=None,
@@ -115,8 +131,8 @@ class Fit:
                         dict_keys=None):
         return
     
-    @staticmethod
-    def constrain_parameter_pair(params,
+    def constrain_parameter_pair(self,
+                                 params=None,
                                  spec='ratio',
                                  param_id='amplitude',
                                  peak_ids=[1,0],
@@ -140,6 +156,8 @@ class Fit:
             peak_ids: list of pairs of peaks to be constrained.
             value: single constraint value for all pairs or list of values for each pair
         '''
+        if params is None:
+            params = self.params
         if spec == 'ratio':
             op = '*'
         elif spec == 'spacing':
@@ -175,18 +193,17 @@ class Fit:
                                                                      prefix_dk,peak_ids_i[1],param_id))
                 
     @classmethod
-    def constrain_ratio(cls, params, **kwargs):
+    def constrain_ratio(cls, params=None, **kwargs):
         '''Wrapper for constrain_parameter_pair() to constrain peak ratios.'''
-        cls.constrain_parameter_pair(params, spec='ratio', param_id='amplitude' **kwargs)
+        cls.constrain_parameter_pair(params=params, spec='ratio', param_id='amplitude' **kwargs)
         
     @classmethod
-    def constrain_spacing(cls, params, **kwargs):
+    def constrain_spacing(cls, params=None, **kwargs):
         '''Wrapper for constrain_parameter_pair() to constrain peak spacings.'''
-        cls.constrain_parameter_pair(params, spec='spacing', param_id='center', **kwargs)
+        cls.constrain_parameter_pair(params=params, spec='spacing', param_id='center', **kwargs)
     
-    @classmethod
-    def constrain_doublet(cls, 
-                          params,
+    def constrain_doublet(self, 
+                          params=None,
                           peak_ids=[1,0],
                           ratio=0.5,
                           splitting=1,
@@ -204,6 +221,8 @@ class Fit:
                 greater than that of the lower-energy peak. If 'match', gamma will be
                 the same for both peaks.
         '''
+        if params is None:
+            params = self.params
         if ratio == 'p':
             ratio = 0.5
         elif ratio == 'd':
@@ -212,8 +231,8 @@ class Fit:
             ratio = 3/4
             
         # constrain peak ratio and spacing
-        cls.constrain_ratio(params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
-        cls.constrain_spacing(params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
+        self.constrain_ratio(params=params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
+        self.constrain_spacing(params=params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
         
         if not constrain_gamma:
             pass
@@ -222,7 +241,7 @@ class Fit:
                 vary_gamma = False
             else:
                 vary_gamma = True
-            cls.constrain_parameter_pair(params, 
+            self.constrain_parameter_pair(params=params, 
                                             spec='spacing',
                                             param_id='gamma',
                                             peak_ids=peak_ids,
@@ -233,9 +252,10 @@ class Fit:
                                             max=np.inf)
 
 
-    @classmethod
-    def init_peak(cls, params, peak_id, lineshape='voigt', prefix=None):
+    def init_peak(self, params=None, peak_id=0, lineshape='voigt', prefix=None):
         '''Initializes parameters for a single peak.'''
+        if params is None:
+            params = self.params
         param_ids = ['center', 'amplitude']
             
         if lineshape == 'voigt':
@@ -259,10 +279,11 @@ class Fit:
                 
             
                 
-    @classmethod
-    def init_peaks(cls, params, n_peaks=1, lineshape='voigt', first_peak_index=0, dict_keys=None):
+    def init_peaks(self, params=None, n_peaks=1, lineshape='voigt', first_peak_index=0, dict_keys=None):
         '''Wrapper for init_peak to initialize multiple peaks.'''
         # if no spec for dict_keys, assume only one dataset
+        if params is None:
+            params = self.params
         if dict_keys is None:
             dict_keys = ['']
         len_dict_keys = len(dict_keys)
@@ -276,7 +297,7 @@ class Fit:
         for i in range(len_dict_keys):
             dk = dict_keys[i]
             for peak_id in range(first_peak_index[i],n_peaks[i],1):
-                cls.init_peak(params, peak_id, lineshape=lineshape, prefix=dk)
+                self.init_peak(params=params, peak_id=peak_id, lineshape=lineshape, prefix=dk)
                 
     @staticmethod
     def constrain_gaussian_width(params, peak_ids):
