@@ -60,7 +60,7 @@ class Fit:
         if Aux.is_list_or_tuple(self.xps):
             self.xps = dict(zip(self.dict_keys, self.xps))
         print(self.dict_keys)
-        # initialize parameters
+        # initialize lmfit parameters
         self.params = Parameters()
         self.init_peaks(params=self.params, 
                         n_peaks=self.n_peaks,
@@ -70,6 +70,54 @@ class Fit:
         self.guess_multi_component(params=self.params,
                                    param_id='center',
                                    dict_keys=self.dict_keys)
+        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        
+    def residual(self,
+                 params,
+                 xps=None,
+                 dict_keys=None,
+                 **kwargs):
+        '''Objective function for lmfit.minimize'''
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+        if xps is None:
+            xps = self.xps
+        for dk in dict_keys:
+            self.generate_model_single_spectrum(xps[dk].ds, params)
+        
+        
+    def generate_model_single_spectrum(self,
+                              ds,
+                              params,
+                              dk=None,
+                              model=0,
+                              n_peaks=0):
+        '''
+        Wrapper for model_single_spectrum. Creates new columns in ds for model and residuals.
+        Always fits to normalized data.
+        '''
+        ds['model_no_bg'] = self.model_single_spectrum(ds['be'],
+                                                       params,
+                                                       dk,
+                                                       model=model,
+                                                       n_peaks=n_peaks)
+        ds['residual'] = ds['model_no_bg'] - ds['cps_no_bg_norm']
+        ds['model'] = ds['model_no_bg'] + ds['bg_norm']
+        
+    # TODO move to Fn class?
+    def model_single_spectrum(self, x, params, dk, model=0, n_peaks=0):
+        if dk is None:
+            prefix_dk = ''
+        else:
+            prefix_dk = '{}_'.format(dk)
+        for i in range(n_peaks):
+            prefix_dk_i = '{}p{}_'.format(prefix_dk, i)
+            model += Fn.voigt(x, 
+                              params[prefix_dk_i+'amplitude'],
+                              params[prefix_dk_i+'center'],
+                              params[prefix_dk_i+'sigma'],
+                              params[prefix_dk_i+'gamma'])
+        return model
         
     def guess_multi_component(self, 
                               params=None, 
@@ -271,7 +319,7 @@ class Fit:
         prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
         # TODO consolidate loops and logic...
         for param_ids_i in param_ids:
-            params.add(prefix_dk+param_ids_i)
+            params.add(prefix_dk+param_ids_i, value=0, min=0, max=np.inf)
         for param_ids_i in param_ids:
             if lineshape == 'voigt':
                 params.add(prefix_dk + 'fwhm',
@@ -343,8 +391,11 @@ class Xps:
         # preprocessing
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
+        # automatically fits background (bg) and background-subtracted data (cps_no_bg)
         if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
+        # automatically computes normalized data:
+        # cps_norm, bg_norm, and cps_no_bg_norm
         if 'cps_no_bg_norm' not in list(ds.data_vars):
             Processing.normalize(self.ds, method=method)
         
@@ -355,6 +406,9 @@ class Xps:
     def fit_background(self,
                        background='shirley',
                        **kwargs):
+        '''
+        Wrapper for Bg.shirley()
+        '''
         if (background == 'shirley') or (background == 's'):
             self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
         self.ds['cps_no_bg'] = ('be', (self.ds['cps'] - self.ds['bg']).data)
