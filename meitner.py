@@ -23,19 +23,28 @@ class Fit:
                  n_peaks=1,
                  lineshape='voigt',
                  first_peak_index=0,
-                 dict_keys=None):
+                 dict_keys=None,
+                 be_guess=None,
+                 fit=True,
+                 expr_constraints=None,
+                 params=None):
         '''
         Args:
             xps: Xps instance or list or dict of Xps instances
-            n_peaks: single specification for number of peaks or list of len(xps)
+            n_peaks: single specification for number of peaks or list of len(xps) with entries
+                corresponding to each Xps instance in xps.
             first_peak_index: starting index for peak IDs, either single specification
-                or list of len(xps)
+                or list of len(xps) with entries corresponding to each Xps instance in xps.
             dict_keys: list of keys corresponding to elements in xps_list
+            expr_constraints: expression constraints passed to Parameters instance.
+                Overwrites existing parameter specifications in params.
         '''
+        self.expr_constraints = expr_constraints
         # ensure xps is iterable
-        if Aux.is_float_or_int(xps):
+        if (not Aux.is_list_or_tuple(xps)) and (not isinstance(xps,dict)):
             xps = [xps]
         self.xps = xps
+        print(self.xps)
         len_xps = len(self.xps)
         print(len_xps)
         # ensure n_peaks is iterable
@@ -59,60 +68,112 @@ class Fit:
         # ensure xps is dict
         if Aux.is_list_or_tuple(self.xps):
             self.xps = dict(zip(self.dict_keys, self.xps))
-        print(self.dict_keys)
-        # initialize lmfit parameters
-        self.params = Parameters()
-        self.init_peaks(params=self.params, 
-                        n_peaks=self.n_peaks,
-                        lineshape=lineshape,
-                        first_peak_index=self.first_peak_index,
-                        dict_keys=self.dict_keys)
-        self.guess_multi_component(params=self.params,
-                                   param_id='center',
-                                   dict_keys=self.dict_keys)
-        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        # initialize lmfit parameters if params not specified
+        if params is None:
+            self.params = Parameters()
+            self.init_peaks(params=self.params, 
+                            n_peaks=self.n_peaks,
+                            lineshape=lineshape,
+                            first_peak_index=self.first_peak_index,
+                            dict_keys=self.dict_keys)
+            self.guess_multi_component(params=self.params,
+                                    param_id='center',
+                                    dict_keys=self.dict_keys,
+                                    peak_ids=[i for i in range(first_peak_index[0],n_peaks[0],1)],
+                                    value=be_guess)
+        else:
+            self.params = params
+        # apply expression constraints
+        self.enforce_expr_constraints(params=self.params,
+                                    expr_constraints=self.expr_constraints)
+        # TODO handle n_peaks if list or tuple
+        if fit:
+            self.result = minimize(self.residual, 
+                                   self.params, 
+                                   kws={
+                                       'dict_keys': self.dict_keys,
+                                       'n_peaks': self.n_peaks[0]})
+        
+    def enforce_expr_constraints(self, params=None, expr_constraints=None):
+        '''
+        Args:
+            params: Parameters instance. Defaults to Xps.params if None.
+            expr_constraints: Expression constraints to be applied to Parameters instance.
+                Syntax: {'parameter_1': {'value': value, ...}, 'parameter_2': {...}, ...}
+        '''
+        if params is None:
+            params = self.params
+        if expr_constraints is None:
+            expr_constraints = {}
+        expr_constraints_keys = list(expr_constraints.keys())
+        for ek in expr_constraints_keys:
+            params.add(ek, **expr_constraints[ek])
+        
         
     def residual(self,
                  params,
                  xps=None,
                  dict_keys=None,
                  **kwargs):
-        '''Objective function for lmfit.minimize'''
+        '''Objective function for lmfit.minimize. Generates a concatenated Xarray Dataset (xps_concat).'''
         if dict_keys is None:
             dict_keys = self.dict_keys
         if xps is None:
             xps = self.xps
         for dk in dict_keys:
-            self.generate_model_single_spectrum(xps[dk].ds, params)
+            self.calculate_model_single_spectrum(xps[dk].ds, 
+                                                 params, 
+                                                 dk=dk, 
+                                                 **kwargs)
+        xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        return xps_concat['residual']
         
-        
-    def generate_model_single_spectrum(self,
+    def calculate_model_single_spectrum(self,
                               ds,
                               params,
                               dk=None,
                               model=0,
                               n_peaks=0):
         '''
-        Wrapper for model_single_spectrum. Creates new columns in ds for model and residuals.
+        Wrapper for model_single_spectrum(). Creates new columns in ds for model and residuals.
         Always fits to normalized data.
         '''
         ds['model_no_bg'] = self.model_single_spectrum(ds['be'],
                                                        params,
-                                                       dk,
+                                                       dk=dk,
                                                        model=model,
                                                        n_peaks=n_peaks)
         ds['residual'] = ds['model_no_bg'] - ds['cps_no_bg_norm']
+        ds['std_residual'] = ds['residual']/ds['residual'].std()
         ds['model'] = ds['model_no_bg'] + ds['bg_norm']
         
     # TODO move to Fn class?
-    def model_single_spectrum(self, x, params, dk, model=0, n_peaks=0):
+    # TODO add support for nonzero starting index
+    def model_single_spectrum(self, 
+                              be, 
+                              params, 
+                              dk=None, 
+                              model=0, 
+                              n_peaks=0,
+                              first_peak_index=0):
+        '''
+        Models a single core-level region with a linear combination of Voigt components.
+        
+        Args:
+            be: binding energy
+            params: lmfit Parameters instance
+            dk: key corresponding to xps entry in Fit instance
+            model: constant shift applied to modelled data
+            n_peaks: number of Voigt components in model
+            first_peak_index: starting index of components in Parameters instance
+        '''
         if dk is None:
             prefix_dk = ''
         else:
             prefix_dk = '{}_'.format(dk)
-        for i in range(n_peaks):
+        for i in range(first_peak_index,n_peaks,1):
             prefix_dk_i = '{}p{}_'.format(prefix_dk, i)
-            model += Fn.voigt(x, 
+            model += Fn.voigt(be, 
                               params[prefix_dk_i+'amplitude'],
                               params[prefix_dk_i+'center'],
                               params[prefix_dk_i+'sigma'],
@@ -136,6 +197,9 @@ class Fit:
         if Aux.is_float_or_int(peak_ids):
             peak_ids = [peak_ids]
         len_peak_ids = len(peak_ids)
+        if value is None:
+            # TODO add automatic guessing if not specified
+            value = 0
         if Aux.is_float_or_int(value):
             value = [value for _ in range(len_peak_ids)]
         if Aux.is_float_or_int(min):
@@ -319,7 +383,8 @@ class Fit:
         prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
         # TODO consolidate loops and logic...
         for param_ids_i in param_ids:
-            params.add(prefix_dk+param_ids_i, value=0, min=0, max=np.inf)
+            # default value > 0 to prevent division by zero
+            params.add(prefix_dk+param_ids_i, value=10**-8, min=0, max=np.inf)
         for param_ids_i in param_ids:
             if lineshape == 'voigt':
                 params.add(prefix_dk + 'fwhm',
