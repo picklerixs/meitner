@@ -69,6 +69,7 @@ class Fit:
         # ensure xps is dict
         if Aux.is_list_or_tuple(self.xps):
             self.xps = dict(zip(self.dict_keys, self.xps))
+            
         # initialize lmfit parameters if params not specified
         if params is None:
             self.params = Parameters()
@@ -84,17 +85,21 @@ class Fit:
                                     value=be_guess)
         else:
             self.params = params
+            
         # apply expression constraints
         self.enforce_expr_constraints(params=self.params,
                                     expr_constraints=self.expr_constraints)
         # TODO handle n_peaks if list or tuple
         if fit:
-            self.result = minimize(self.residual, 
-                                   self.params, 
-                                   method=method,
-                                   kws={
-                                       'dict_keys': self.dict_keys,
-                                       'n_peaks': self.n_peaks[0]})
+            self.fit(method=method)
+    
+    def fit(self, method='leastsq'):
+        self.result = minimize(self.residual, 
+                                self.params, 
+                                method=method,
+                                kws={
+                                    'dict_keys': self.dict_keys,
+                                    'n_peaks': self.n_peaks[0]})
         
     def enforce_expr_constraints(self, params=None, expr_constraints=None):
         '''
@@ -408,8 +413,22 @@ class Fit:
                 
             
                 
-    def init_peaks(self, params=None, n_peaks=1, lineshape='voigt', first_peak_index=0, dict_keys=None):
-        '''Wrapper for init_peak to initialize multiple peaks.'''
+    def init_peaks(self, 
+                   params=None, 
+                   n_peaks=1,
+                   lineshape='voigt',
+                   first_peak_index=0,
+                   dict_keys=None):
+        '''
+        Wrapper for init_peak to initialize multiple peaks.
+        
+        Args:
+            params: lmfit Parameters instance.
+            n_peaks: single specification for number of peaks or list of len(dict_keys).
+            first_peak_index: starting index for peak IDs, either single specification
+                or list of len(dict_keys).
+            dict_keys: list of keys corresponding to list of Xps instances to be fitted.
+        '''
         # if no spec for dict_keys, assume only one dataset
         if params is None:
             params = self.params
@@ -428,8 +447,55 @@ class Fit:
             for peak_id in range(first_peak_index[i],n_peaks[i],1):
                 self.init_peak(params=params, peak_id=peak_id, lineshape=lineshape, prefix=dk)
                 
-    @staticmethod
-    def constrain_gaussian_width(params, peak_ids):
+    def constrain_all_gaussian_width(self,
+                                 params=None, 
+                                 reference_peak_id=0,
+                                 peak_ids=1,
+                                 dict_keys=None):
+        '''Wrapper for constrain_parameter_pair() with spec='sigma'.'''
+        if params is None:
+            params = self.params
+        if dict_keys is None:
+            dict_keys = ['']
+        len_dict_keys = len(dict_keys)
+        # ensure n_peaks is iterable
+        if Aux.is_float_or_int(n_peaks):
+            n_peaks = [n_peaks for _ in range(len_dict_keys)]
+        peak_id_pairs = 0
+        self.constrain_parameter_pair(params=params,
+                                      spec='spacing',
+                                      param_id='sigma',
+                                      peak_ids=0)
+        return
+    
+    def constrain_parameter_to_reference(self,
+                                         params=None,
+                                         param_id='sigma',
+                                         peak_ids=None,
+                                         reference_peak_id=0,
+                                         dict_keys=None,
+                                         vary=True,
+                                         value=None,
+                                         min=0,
+                                         max=np.inf):
+        if params is None:
+            params = self.params
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+        # len_dict_keys = len(dict_keys)
+        if Aux.is_float_or_int(peak_ids):
+            peak_ids = [peak_ids]
+        for dk in dict_keys:
+            prefix_dk = '{}_'.format(dk)
+            if value is not None:
+                params.add('{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id),
+                           value=value,
+                           min=min,
+                           max=max,
+                           vary=vary)
+            for peak_id in peak_ids:
+                params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
+                           expr='{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id))
         return
             
     
