@@ -27,7 +27,8 @@ class Fit:
                  be_guess=None,
                  fit=True,
                  expr_constraints=None,
-                 params=None):
+                 params=None,
+                 method='leastsq'):
         '''
         Args:
             xps: Xps instance or list or dict of Xps instances
@@ -90,6 +91,7 @@ class Fit:
         if fit:
             self.result = minimize(self.residual, 
                                    self.params, 
+                                   method=method,
                                    kws={
                                        'dict_keys': self.dict_keys,
                                        'n_peaks': self.n_peaks[0]})
@@ -364,7 +366,15 @@ class Fit:
                                             max=np.inf)
 
 
-    def init_peak(self, params=None, peak_id=0, lineshape='voigt', prefix=None):
+    def init_peak(self, 
+                  params=None,
+                  peak_id=0,
+                  lineshape='voigt', 
+                  prefix=None,
+                  center=10**-8,
+                  amplitude=None,
+                  gamma=0.5,
+                  sigma=0.5):
         '''Initializes parameters for a single peak.'''
         if params is None:
             params = self.params
@@ -382,9 +392,15 @@ class Fit:
             
         prefix_dk = '{}p{}_'.format(prefix_dk, peak_id)
         # TODO consolidate loops and logic...
+        # guess amplitude based on initial Gaussian width
+        # TODO guess amplitude based on integral of data
+        if amplitude is None:
+            amplitude = sigma*np.sqrt(2*np.pi)
+        param_values = [center,amplitude,sigma,gamma]
+        param_values = dict(zip(param_ids, param_values))
         for param_ids_i in param_ids:
             # default value > 0 to prevent division by zero
-            params.add(prefix_dk+param_ids_i, value=10**-8, min=0, max=np.inf)
+            params.add(prefix_dk+param_ids_i, value=param_values[param_ids_i], min=0, max=np.inf)
         for param_ids_i in param_ids:
             if lineshape == 'voigt':
                 params.add(prefix_dk + 'fwhm',
