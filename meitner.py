@@ -45,9 +45,7 @@ class Fit:
         if (not Aux.is_list_or_tuple(xps)) and (not isinstance(xps,dict)):
             xps = [xps]
         self.xps = xps
-        print(self.xps)
         len_xps = len(self.xps)
-        print(len_xps)
         # ensure n_peaks is iterable
         if Aux.is_float_or_int(n_peaks):
             n_peaks = [n_peaks for _ in range(len_xps)]
@@ -69,6 +67,9 @@ class Fit:
         # ensure xps is dict
         if Aux.is_list_or_tuple(self.xps):
             self.xps = dict(zip(self.dict_keys, self.xps))
+            
+        for dk in self.dict_keys:
+            self.xps[dk].ds['index'] = dk
             
         # initialize lmfit parameters if params not specified
         if params is None:
@@ -92,6 +93,15 @@ class Fit:
         # TODO handle n_peaks if list or tuple
         if fit:
             self.fit(method=method)
+        else:
+            self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+    
+    def plot(self, offset=0.5):
+        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        segments = len(self.xps)
+        n_points = [len(x.ds for x in list(self.xps.values()))]
+        
+        g = xr.plot.FacetGrid()
     
     def fit(self, method='leastsq'):
         self.result = minimize(self.residual, 
@@ -132,8 +142,8 @@ class Fit:
                                                  params, 
                                                  dk=dk, 
                                                  **kwargs)
-        xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
-        return xps_concat['residual']
+        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        return self.xps_concat['residual']
         
     def calculate_model_single_spectrum(self,
                               ds,
@@ -249,6 +259,75 @@ class Fit:
                         expr_constraints=None,
                         dict_keys=None):
         return
+    
+    
+    # TODO options for 'all', align (peak-by-peak), and within (each spectrum)
+    def constrain_all_gaussian_width(self,
+                                    params=None,
+                                    peak_ids='all',
+                                    reference_peak_id=0,
+                                    n_peaks=None,
+                                    dict_keys=None,
+                                    **kwargs):
+        '''
+        Wrapper for constrain_parameter_to_reference() with spec='sigma'.
+        
+        Args:
+            peak_ids: List of component IDs, 'all' to constrain all, 'align' to constrain
+                component-by-component across multiple spectra, and 'within' to constrain all
+                components in each spectrum
+        '''
+        if params is None:
+            params = self.params
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+        len_dict_keys = len(dict_keys)
+        if n_peaks is None:
+            n_peaks = self.n_peaks
+        if Aux.is_float_or_int(n_peaks):
+            n_peaks = [n_peaks for _ in range(len_dict_keys)]
+        if Aux.is_float_or_int(peak_ids):
+            peak_ids = [peak_ids]
+        # TODO support n_peaks with different spec for each entry in dict_keys
+        elif peak_ids == 'all':
+            peak_ids = [i for i in range(reference_peak_id+1, n_peaks[0], 1)]
+        self.constrain_parameter_to_reference(params=params,
+                                              peak_ids=peak_ids,
+                                              reference_peak_id=reference_peak_id,
+                                              **kwargs)
+        return
+    
+    
+    def constrain_parameter_to_reference(self,
+                                         params=None,
+                                         param_id='sigma',
+                                         peak_ids=None,
+                                         reference_peak_id=0,
+                                         dict_keys=None,
+                                         vary=True,
+                                         value=None,
+                                         min=0,
+                                         max=np.inf):
+        if params is None:
+            params = self.params
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+        # len_dict_keys = len(dict_keys)
+        if Aux.is_float_or_int(peak_ids):
+            peak_ids = [peak_ids]
+        for dk in dict_keys:
+            prefix_dk = '{}_'.format(dk)
+            if value is not None:
+                params.add('{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id),
+                           value=value,
+                           min=min,
+                           max=max,
+                           vary=vary)
+            for peak_id in peak_ids:
+                params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
+                           expr='{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id))
+        return
+    
     
     def constrain_parameter_pair(self,
                                  params=None,
@@ -446,57 +525,6 @@ class Fit:
             dk = dict_keys[i]
             for peak_id in range(first_peak_index[i],n_peaks[i],1):
                 self.init_peak(params=params, peak_id=peak_id, lineshape=lineshape, prefix=dk)
-                
-    def constrain_all_gaussian_width(self,
-                                 params=None, 
-                                 reference_peak_id=0,
-                                 peak_ids=1,
-                                 dict_keys=None):
-        '''Wrapper for constrain_parameter_pair() with spec='sigma'.'''
-        if params is None:
-            params = self.params
-        if dict_keys is None:
-            dict_keys = ['']
-        len_dict_keys = len(dict_keys)
-        # ensure n_peaks is iterable
-        if Aux.is_float_or_int(n_peaks):
-            n_peaks = [n_peaks for _ in range(len_dict_keys)]
-        peak_id_pairs = 0
-        self.constrain_parameter_pair(params=params,
-                                      spec='spacing',
-                                      param_id='sigma',
-                                      peak_ids=0)
-        return
-    
-    def constrain_parameter_to_reference(self,
-                                         params=None,
-                                         param_id='sigma',
-                                         peak_ids=None,
-                                         reference_peak_id=0,
-                                         dict_keys=None,
-                                         vary=True,
-                                         value=None,
-                                         min=0,
-                                         max=np.inf):
-        if params is None:
-            params = self.params
-        if dict_keys is None:
-            dict_keys = self.dict_keys
-        # len_dict_keys = len(dict_keys)
-        if Aux.is_float_or_int(peak_ids):
-            peak_ids = [peak_ids]
-        for dk in dict_keys:
-            prefix_dk = '{}_'.format(dk)
-            if value is not None:
-                params.add('{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id),
-                           value=value,
-                           min=min,
-                           max=max,
-                           vary=vary)
-            for peak_id in peak_ids:
-                params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
-                           expr='{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id))
-        return
             
     
 class Fn:
