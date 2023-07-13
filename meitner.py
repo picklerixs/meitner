@@ -72,17 +72,19 @@ class Fit:
             self.xps[dk].ds['index'] = dk
             
         # initialize lmfit parameters if params not specified
+        # TODO implement proper handling of first_peak_index and n_peaks
         if params is None:
             self.params = Parameters()
             self.init_peaks(params=self.params, 
-                            n_peaks=self.n_peaks,
+                            n_peaks=self.n_peaks[0],
                             lineshape=lineshape,
-                            first_peak_index=self.first_peak_index,
+                            first_peak_index=self.first_peak_index[0],
                             dict_keys=self.dict_keys)
+            # TODO save peak IDs to each Xps instance (maybe in attributes of Xps.ds?)
             self.guess_multi_component(params=self.params,
                                     param_id='center',
                                     dict_keys=self.dict_keys,
-                                    peak_ids=[i for i in range(first_peak_index[0],n_peaks[0],1)],
+                                    peak_ids=[i for i in range(self.first_peak_index[0],self.n_peaks[0],1)],
                                     value=be_guess)
         else:
             self.params = params
@@ -90,7 +92,6 @@ class Fit:
         # apply expression constraints
         self.enforce_expr_constraints(params=self.params,
                                     expr_constraints=self.expr_constraints)
-        # TODO handle n_peaks if list or tuple
         if fit:
             self.fit(method=method)
         else:
@@ -575,17 +576,48 @@ class Xps:
             Processing.normalize(self.ds, method=method)
         
     @classmethod
-    def from_vamas(cls, **kwargs):
-        return cls(Vms.import_single_vamas(**kwargs))
+    def from_vamas(cls, path=None, region_id=None, vamas_kwargs=None, **kwargs):
+        if vamas_kwargs is None:
+            vamas_kwargs = {}
+        return cls(Vms.import_single_vamas(path=path, region_id=region_id, **vamas_kwargs), **kwargs)
     
     def fit_background(self,
                        background='shirley',
+                       break_point=None,
+                       break_point_search_interval=None,
                        **kwargs):
         '''
         Wrapper for Bg.shirley()
+        
+        Args:
+            background: Background type ('shirley' or 'linear').
+            break_point: Split data into 2 sub-regions at the specified binding energy.
+                If 'search', will attempt to find a minimum on cps in break_point_search_interval
+                and use the index of the minimum to define break_point.
+            break_point_search_interval: Search interval if break_point is 'search'.
         '''
-        if (background == 'shirley') or (background == 's'):
-            self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
+        if Aux.is_list_or_tuple(break_point_search_interval) and (break_point == 'search'):
+            break_point_search_interval = [max(break_point_search_interval),
+                                           min(break_point_search_interval)]
+            break_point = self.ds.sel(be=slice(*break_point_search_interval)).cps.idxmin().data
+            print()
+            print('Found break point at {} eV.'.format(break_point))
+            
+        if Aux.is_float_or_int(break_point):
+            ds_upper = self.ds.sel(be=slice(np.inf, break_point))
+            ds_lower = self.ds.sel(be=slice(break_point, -np.inf))
+            ds_list = [ds_upper, ds_lower]
+            if (background == 'shirley') or (background == 's'):
+                i = 0
+                for ds in ds_list:
+                    ds['bg'] = ('be', Bg.shirley(ds['cps'], **kwargs))
+                    if i > 0:
+                        ds_list[i] = ds.drop_isel(be=0)
+                    i += 1
+                self.ds = xr.concat(ds_list, dim='be')
+        else:
+            if (background == 'shirley') or (background == 's'):
+                self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
         self.ds['cps_no_bg'] = ('be', (self.ds['cps'] - self.ds['bg']).data)
 
 class Aux:
