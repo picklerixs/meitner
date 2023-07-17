@@ -107,20 +107,24 @@ class Fit:
         for dk in self.dict_keys:
             self.xps[dk].ds['index'] = dk
             
+        # ! ensure that this is kept updated if new peaks are added!
+        self.peak_ids = {}
+        for i in range(len(self.dict_keys)):
+            dk = self.dict_keys[i]
+            self.peak_ids.update({dk: [j for j in range(self.first_peak_index[i], self.n_peaks[i], 1)]})
+            
         # initialize lmfit parameters if params not specified
-        # TODO implement proper handling of first_peak_index and n_peaks
         if params is None:
             self.params = Parameters()
             self.init_peaks(params=self.params, 
-                            n_peaks=self.n_peaks[0],
+                            n_peaks=self.n_peaks,
                             lineshape=lineshape,
-                            first_peak_index=self.first_peak_index[0],
+                            first_peak_index=self.first_peak_index,
                             dict_keys=self.dict_keys)
-            # TODO save peak IDs to each Xps instance (maybe in attributes of Xps.ds?)
             self.guess_multi_component(params=self.params,
                                     param_id='center',
                                     dict_keys=self.dict_keys,
-                                    peak_ids=[i for i in range(self.first_peak_index[0],self.n_peaks[0],1)],
+                                    peak_ids=self.peak_ids,
                                     value=be_guess)
         else:
             self.params = params
@@ -132,57 +136,7 @@ class Fit:
             self.fit(method=method)
         else:
             self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
-            
-        # initialize plot styling variables
-        # self.set_class_plot_config()
-    
-    # # TODO eliminate this to fix initialization issues
-    # @classmethod
-    # def set_class_plot_config(cls, profile=None,
-    #                         # font options
-    #                         font_family='Arial', label_font_size=12, tick_font_size=12, usetex=False,
-    #                         # line styling options
-    #                         envelope_linewidth=1.7, component_linewidth=1.6, axes_linewidth=1.5, background_linewidth=1.6,
-    #                         # marker styling options
-    #                         marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3,
-    #                         colors=None):
-    #     # TODO add presets that can be overwritten if any of the individual parameters are user-specified
-    #     if profile == 'print':
-    #         pass
-    #     elif profile == 'slide':
-    #         pass
-        
-    #     if colors is None:
-    #         cls.colors = [[98/255,146/255,190/255], # mid-blue
-    #                 [64/255,105/255,149/255], # dark blue
-    #                 [133/255,127/255,188/255], # sour purple
-    #                 [66/255,69/255,133/255], # dark purple
-    #                 [250/255,172/255,116/255], # light orange
-    #                 [194/255,104/255,47/255], # burnt orange
-    #                 [247/255,168/255,170/255], # strawberry pink
-    #                 [240/255,79/255,82/255]] # red
-            
-    #     cls.data_color = 'black'
-        
-    #     cls.font_family = font_family
-    #     cls.label_font_size = label_font_size
-    #     cls.tick_font_size = tick_font_size
-    #     cls.usetex = usetex
-        
-    #     cls.envelope_linewidth = envelope_linewidth
-    #     cls.component_linewidth = component_linewidth
-    #     cls.background_linewidth = background_linewidth
-    #     cls.axes_linewidth = axes_linewidth
-        
-    #     cls.marker = marker
-    #     cls.residual_marker = residual_marker
-    #     cls.marker_size = marker_size
-    #     cls.marker_alpha = marker_alpha
-    #     cls.marker_edge_width = marker_edge_width
-        
-    #     rc('font',**{'family':'sans-serif','sans-serif':[cls.font_family]})
-    #     rc('text', usetex=cls.usetex)
-    #     rcParams['axes.linewidth'] = cls.axes_linewidth
+
     
     def plot_separate(self, 
                     subtract_bg=True, normalize=True,
@@ -410,34 +364,53 @@ class Fit:
                               value=0, 
                               min=0, 
                               max=np.inf, 
+                              vary=True,
                               dict_keys=None):
+        '''
+        Sets initial value and bounds [min, max] for a single fit parameter in an lmfit Parameters instace for 
+        one or more core-level regions given in dict_keys.
+        
+        Args:
+            params: lmfit Parameters instance.
+            param_id: Parameter to be initialized.
+            peak_ids: List of peak IDs. Possible inputs:
+                Int or float: Specification of a single peak ID to be guessed across all regions in dict_keys.
+                List of int or float: Specification of multiple peak IDs to be guessed across all regions in dict_keys.
+                    Assumes specified peak IDs exist for all regions in dict_keys.
+                Dict of list of int or float: Dictionary with entries corresponding to dict_keys. Each entry must be a list
+                    containing one or more peak IDs to be guessed.
+            value: Parameter value. Form analogous to peak_ids.
+            min: Minimum parameter bound. Form analogous to peak_ids.
+            max: Maximum parameter bound. Form analogous to peak_ids.
+            vary: Fix or vary parameter value(s) from initial value.
+            dict_keys: list of keys corresponding to data to be fitted.
+        '''
         if params is None:
             params = self.params
         if dict_keys is None:
             dict_keys = ['']
         elif not Aux.is_list_or_tuple(dict_keys):
             dict_keys = [dict_keys]
-        if Aux.is_float_or_int(peak_ids):
-            peak_ids = [peak_ids]
-        len_peak_ids = len(peak_ids)
-        if value is None:
-            # TODO add automatic guessing if not specified
-            value = 0
-        if Aux.is_float_or_int(value):
-            value = [value for _ in range(len_peak_ids)]
-        if Aux.is_float_or_int(min):
-            min = [min for _ in range(len_peak_ids)]
-        if Aux.is_float_or_int(max):
-            max = [max for _ in range(len_peak_ids)]
+        
+        peak_ids_dict = Aux.initialize_dict(peak_ids, dict_keys)
+        value_dict = Aux.initialize_dict(value, dict_keys, ref_dict=peak_ids_dict)
+        min_dict = Aux.initialize_dict(min, dict_keys, ref_dict=peak_ids_dict)
+        max_dict = Aux.initialize_dict(max, dict_keys, ref_dict=peak_ids_dict)
 
         for dk in dict_keys:
+            peak_ids_dk = peak_ids_dict[dk]
+            len_peak_ids = len(peak_ids_dk)
+            value_dk = value_dict[dk]
+            min_dk = min_dict[dk]
+            max_dk = max_dict[dk]
             for i in range(len_peak_ids):
-                prefix = '{}_p{}'.format(dk,peak_ids[i])
+                prefix = '{}_p{}'.format(dk,peak_ids_dk[i])
                 self.guess_component_parameter(params=self.params, 
                                               param_id=param_id,
-                                              value=value[i],
-                                              min=min[i],
-                                              max=max[i],
+                                              value=value_dk[i],
+                                              min=min_dk[i],
+                                              max=max_dk[i],
+                                              vary=vary,
                                               prefix=prefix)
         
     def guess_component_parameter(self,
@@ -445,7 +418,8 @@ class Fit:
                                   param_id='center', 
                                   value=0, 
                                   min=0, 
-                                  max=np.inf, 
+                                  max=np.inf,
+                                  vary=True,
                                   prefix=None, 
                                   **kwargs):
         if params is None:
@@ -454,17 +428,7 @@ class Fit:
             prefix_dk = ''
         else:
             prefix_dk = '{}_'.format(prefix)
-        params[prefix_dk+param_id].set(value=value, min=min, max=max, **kwargs)
-        
-    def generate_params(self,
-                        params=None,
-                        be_guess=None,
-                        lineshape='voigt',
-                        peak_ratios=None,
-                        peak_spacings=None,
-                        expr_constraints=None,
-                        dict_keys=None):
-        return
+        params[prefix_dk+param_id].set(value=value, min=min, max=max, vary=vary, **kwargs)
     
     
     # TODO options for 'all', align (peak-by-peak), and within (each spectrum)
@@ -850,6 +814,24 @@ class Aux:
             return [x]
         else:
             return x
+        
+    @classmethod
+    def initialize_dict(cls, x, dict_keys, len_list=1, ref_dict=None):         
+        if (cls.is_float_or_int(x) or (x is None)) and isinstance(ref_dict, dict):
+            x_dict = {}
+            for dk in dict_keys:
+                x_dict.update({dk: [x for _ in range(len(ref_dict[dk]))]})
+            return x_dict
+        
+        if (cls.is_float_or_int(x) or (x is None)):
+            x = [x for _ in range(len_list)]
+        
+        if cls.is_list_or_tuple(x):
+            x_dict = {}
+            x_dict.update({dk: x for dk in dict_keys})
+        elif isinstance(x, dict):
+            x_dict = x
+        return x_dict
      
 class Processing:
     @staticmethod
