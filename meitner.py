@@ -18,6 +18,42 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 class Fit:
     
+    # class variables for plot styling
+    colors = [[98/255,146/255,190/255], # mid-blue
+            [64/255,105/255,149/255], # dark blue
+            [133/255,127/255,188/255], # sour purple
+            [66/255,69/255,133/255], # dark purple
+            [250/255,172/255,116/255], # light orange
+            [194/255,104/255,47/255], # burnt orange
+            [247/255,168/255,170/255], # strawberry pink
+            [240/255,79/255,82/255]] # red
+        
+    data_color = 'black'
+    background_color = 'gray'
+    
+    font_family = 'Arial'
+    label_font_size = 12
+    tick_font_size = 12
+    usetex = False
+    
+    envelope_linewidth = 1.7
+    component_linewidth = 1.6
+    background_linewidth = 1.6
+    axes_linewidth = 1.5
+    
+    marker = '+'
+    residual_marker = marker
+    marker_size = 30
+    marker_alpha = 2/3
+    marker_edge_width = 0.75
+    
+    data_zorder = 999
+    background_zorder = 0
+    
+    rc('font',**{'family':'sans-serif','sans-serif':[font_family]})
+    rc('text', usetex=usetex)
+    rcParams['axes.linewidth'] = axes_linewidth
+    
     def __init__(self, 
                  xps,
                  n_peaks=1,
@@ -96,13 +132,182 @@ class Fit:
             self.fit(method=method)
         else:
             self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+            
+        # initialize plot styling variables
+        # self.set_class_plot_config()
     
-    def plot(self, offset=0.5):
-        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
-        segments = len(self.xps)
-        n_points = [len(x.ds for x in list(self.xps.values()))]
+    # # TODO eliminate this to fix initialization issues
+    # @classmethod
+    # def set_class_plot_config(cls, profile=None,
+    #                         # font options
+    #                         font_family='Arial', label_font_size=12, tick_font_size=12, usetex=False,
+    #                         # line styling options
+    #                         envelope_linewidth=1.7, component_linewidth=1.6, axes_linewidth=1.5, background_linewidth=1.6,
+    #                         # marker styling options
+    #                         marker='+', residual_marker='+', marker_size=5, marker_alpha=2/3, marker_edge_width=2/3,
+    #                         colors=None):
+    #     # TODO add presets that can be overwritten if any of the individual parameters are user-specified
+    #     if profile == 'print':
+    #         pass
+    #     elif profile == 'slide':
+    #         pass
         
-        g = xr.plot.FacetGrid()
+    #     if colors is None:
+    #         cls.colors = [[98/255,146/255,190/255], # mid-blue
+    #                 [64/255,105/255,149/255], # dark blue
+    #                 [133/255,127/255,188/255], # sour purple
+    #                 [66/255,69/255,133/255], # dark purple
+    #                 [250/255,172/255,116/255], # light orange
+    #                 [194/255,104/255,47/255], # burnt orange
+    #                 [247/255,168/255,170/255], # strawberry pink
+    #                 [240/255,79/255,82/255]] # red
+            
+    #     cls.data_color = 'black'
+        
+    #     cls.font_family = font_family
+    #     cls.label_font_size = label_font_size
+    #     cls.tick_font_size = tick_font_size
+    #     cls.usetex = usetex
+        
+    #     cls.envelope_linewidth = envelope_linewidth
+    #     cls.component_linewidth = component_linewidth
+    #     cls.background_linewidth = background_linewidth
+    #     cls.axes_linewidth = axes_linewidth
+        
+    #     cls.marker = marker
+    #     cls.residual_marker = residual_marker
+    #     cls.marker_size = marker_size
+    #     cls.marker_alpha = marker_alpha
+    #     cls.marker_edge_width = marker_edge_width
+        
+    #     rc('font',**{'family':'sans-serif','sans-serif':[cls.font_family]})
+    #     rc('text', usetex=cls.usetex)
+    #     rcParams['axes.linewidth'] = cls.axes_linewidth
+    
+    def plot_separate(self, 
+                    subtract_bg=True, normalize=True,
+                    display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
+                    text=None,
+                    residual_lim=[-3,3],
+                    colors=None, component_z_spec=False, xdim=None, ydim=3.25, energy_axis='be',
+                    save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
+        if colors is None:
+            colors = self.colors
+            
+        if subtract_bg:
+            bg_suffix = '_no_bg'
+        else:
+            bg_suffix = ''
+            
+        if normalize:
+            norm_suffix = '_norm'
+        else:
+            norm_suffix = ''
+            
+        y_suffix = bg_suffix + norm_suffix
+            
+        if xdim is None:
+            xdim = ydim*4/3
+            
+        if (ylabel is None) or (not isinstance(ylabel, str)):
+            ylabel = 'Intensity'
+        
+        # generate separate subplot objects for each xarray dataset
+        self.fig_dict = {}
+        self.ax_dict = {}
+        self.residual_ax_dict = {}
+        for dk in self.dict_keys:
+            # use gridspec to combine main and residual plots
+            fig = plt.figure(layout='constrained')
+            gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
+            ax, residual_ax = gs.subplots(sharex=True,sharey=False)
+            ds_dk = self.xps[dk].ds
+            
+            xmin = float(ds_dk[energy_axis].min().data)
+            xmax = float(ds_dk[energy_axis].max().data)
+            print(xmin)
+            print(xmax)
+            
+            ds_dk.plot.scatter(x=energy_axis,
+                               y='cps'+y_suffix, 
+                               ax=ax, 
+                               facecolor=self.data_color, 
+                               marker=self.marker,
+                               s=self.marker_size,
+                               linewidths=self.marker_edge_width,
+                               zorder=self.data_zorder)
+            
+            if display_bg:
+                if subtract_bg:
+                    ax.hlines(0, xmin, xmax,
+                               colors=self.background_color,
+                               linewidths=self.background_linewidth,
+                               zorder=self.background_zorder)
+                else:
+                    ds_dk.plot.scatter(x=energy_axis,
+                                       y='bg'+norm_suffix,
+                                       ax=ax,
+                                       color=self.background_color,
+                                       marker=False,
+                                       linestyle='--',
+                                       linewidths=self.background_linewidth,
+                                       zorder=self.background_zorder)
+                # sns.lineplot(data=df_key, x=energy_axis, y='bg', 
+                #              ax=ax, color=self.background_color, linewidth=self.background_linewidth)
+                
+            # if display_envelope:
+            #     sns.lineplot(data=df_key, x=energy_axis, y='fit'+y_suffix, 
+            #                  ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=998)
+            
+            # if display_components:
+            #     i = 0
+            #     for peak_number in range(self.n_peaks[key]):
+            #         sns.lineplot(data=df_key, x=energy_axis, y='p{}'.format(peak_number)+y_suffix, 
+            #                      ax=ax, color=colors[i], linewidth=self.component_linewidth)
+            #         i += 1
+
+            # if not isinstance(ax_kwargs, dict):
+            #     ax_kwargs = {}
+            # self.ax_opts(ax, **ax_kwargs)
+            # # ! overwrites manual specification of ylim
+            # if ypad != False or (ypad != 0):
+            #     ymin = min(df_key['cps'+y_suffix])
+            #     ymax = max(df_key['cps'+y_suffix])
+            #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
+            
+            # ax.set_ylabel(ylabel, fontsize=self.label_font_size)
+            # ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            # if text != None:
+            #     ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
+            # # if tight_layout:
+            # #     plt.tight_layout()
+            # j += 1
+            
+            # residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
+            # sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
+            #                 ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
+            #                 ms=self.marker_size, mew=self.marker_edge_width)
+            # residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
+            # self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
+            # if energy_axis == 'be':
+            #     residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+            #     residual_ax.invert_xaxis() # only need to invert one axis
+            # elif energy_axis == 'ke':
+            #     residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
+            # residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            
+            # fig.set_size_inches(xdim,ydim)
+            # # if tight_layout:
+            # #     plt.tight_layout()
+
+            # if isinstance(save_fig,dict):
+            #     fig.savefig(save_fig[key]+".svg")
+            # if isinstance(save_fig,str):
+            #     fig.savefig(save_fig+".svg")
+                
+            self.fig_dict[dk] = fig
+            self.ax_dict[dk] = ax
+            self.residual_ax_dict[dk] = residual_ax
     
     def fit(self, method='leastsq'):
         self.result = minimize(self.residual, 
