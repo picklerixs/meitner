@@ -30,6 +30,7 @@ class Fit:
         
     data_color = 'black'
     background_color = 'gray'
+    envelope_color = 'black'
     
     font_family = 'Arial'
     label_font_size = 12
@@ -43,12 +44,13 @@ class Fit:
     
     marker = '+'
     residual_marker = marker
-    marker_size = 30
+    marker_size = 6
     marker_alpha = 2/3
     marker_edge_width = 0.75
     
     data_zorder = 999
-    background_zorder = 0
+    background_zorder = 100
+    envelope_zorder = background_zorder+1
     
     rc('font',**{'family':'sans-serif','sans-serif':[font_family]})
     rc('text', usetex=usetex)
@@ -64,7 +66,8 @@ class Fit:
                  fit=True,
                  expr_constraints=None,
                  params=None,
-                 method='leastsq'):
+                 method='leastsq',
+                 peak_ids=None):
         '''
         Args:
             xps: Xps instance or list or dict of Xps instances
@@ -108,10 +111,11 @@ class Fit:
             self.xps[dk].ds['index'] = dk
             
         # ! ensure that this is kept updated if new peaks are added!
-        self.peak_ids = {}
-        for i in range(len(self.dict_keys)):
-            dk = self.dict_keys[i]
-            self.peak_ids.update({dk: [j for j in range(self.first_peak_index[i], self.n_peaks[i], 1)]})
+        if peak_ids is None:
+            self.peak_ids = {}
+            for i in range(len(self.dict_keys)):
+                dk = self.dict_keys[i]
+                self.peak_ids.update({dk: [j for j in range(self.first_peak_index[i], self.n_peaks[i], 1)]})
             
         # initialize lmfit parameters if params not specified
         if params is None:
@@ -131,7 +135,7 @@ class Fit:
             
         # apply expression constraints
         self.enforce_expr_constraints(params=self.params,
-                                    expr_constraints=self.expr_constraints)
+                                      expr_constraints=self.expr_constraints)
         if fit:
             self.fit(method=method)
         else:
@@ -182,15 +186,8 @@ class Fit:
             print(xmin)
             print(xmax)
             
-            ds_dk.plot.scatter(x=energy_axis,
-                               y='cps'+y_suffix, 
-                               ax=ax, 
-                               facecolor=self.data_color, 
-                               marker=self.marker,
-                               s=self.marker_size,
-                               linewidths=self.marker_edge_width,
-                               zorder=self.data_zorder)
-            
+            ds_dk['cps'+y_suffix].plot.line(ax=ax, mec=self.data_color, marker=self.marker, ls='None',
+                            ms=self.marker_size, mew=self.marker_edge_width, zorder=self.data_zorder)
             if display_bg:
                 if subtract_bg:
                     ax.hlines(0, xmin, xmax,
@@ -198,27 +195,16 @@ class Fit:
                                linewidths=self.background_linewidth,
                                zorder=self.background_zorder)
                 else:
-                    ds_dk.plot.scatter(x=energy_axis,
-                                       y='bg'+norm_suffix,
-                                       ax=ax,
-                                       color=self.background_color,
-                                       marker=False,
-                                       linestyle='--',
-                                       linewidths=self.background_linewidth,
-                                       zorder=self.background_zorder)
-                # sns.lineplot(data=df_key, x=energy_axis, y='bg', 
-                #              ax=ax, color=self.background_color, linewidth=self.background_linewidth)
-                
-            # if display_envelope:
-            #     sns.lineplot(data=df_key, x=energy_axis, y='fit'+y_suffix, 
-            #                  ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=998)
+                    ds_dk['bg'+norm_suffix].plot.line(ax=ax, color=self.background_color, linewidth=self.background_linewidth, zorder=self.background_zorder)
             
-            # if display_components:
-            #     i = 0
-            #     for peak_number in range(self.n_peaks[key]):
-            #         sns.lineplot(data=df_key, x=energy_axis, y='p{}'.format(peak_number)+y_suffix, 
-            #                      ax=ax, color=colors[i], linewidth=self.component_linewidth)
-            #         i += 1
+            if display_envelope:
+                ds_dk['model'+bg_suffix].plot.line(ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=self.envelope_zorder)
+            
+            if display_components:
+                j = 0
+                for i in self.peak_ids[dk]:
+                    ds_dk['{}{}'.format(i, bg_suffix)].plot.line(ax=ax, color=colors[j], linewidth=self.component_linewidth)
+                    j += 1
 
             # if not isinstance(ax_kwargs, dict):
             #     ax_kwargs = {}
