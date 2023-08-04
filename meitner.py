@@ -558,9 +558,9 @@ class Fit:
         # TODO ensure this will work for constraining peaks across multiple Xps instances
         if not Aux.is_list_or_tuple(dict_keys):
             dict_keys = [None]
-        else:
-            if not Aux.is_list_or_tuple(value):
-                value = [value for _ in range(len(peak_ids))]
+        # else:
+        if not Aux.is_list_or_tuple(value):
+            value = [value for _ in range(len(peak_ids))]
         for dk in dict_keys:
             # prefix to append to parameter names
             # ignored if dict_keys not specified
@@ -584,15 +584,13 @@ class Fit:
                                                                      op,
                                                                      prefix_dk,peak_ids_i[1],param_id))
                 
-    @classmethod
-    def constrain_ratio(cls, params=None, **kwargs):
+    def constrain_ratio(self, params=None, **kwargs):
         '''Wrapper for constrain_parameter_pair() to constrain peak ratios.'''
-        cls.constrain_parameter_pair(params=params, spec='ratio', param_id='amplitude' **kwargs)
+        self.constrain_parameter_pair(params=params, spec='ratio', param_id='amplitude', **kwargs)
         
-    @classmethod
-    def constrain_spacing(cls, params=None, **kwargs):
+    def constrain_spacing(self, params=None, **kwargs):
         '''Wrapper for constrain_parameter_pair() to constrain peak spacings.'''
-        cls.constrain_parameter_pair(params=params, spec='spacing', param_id='center', **kwargs)
+        self.constrain_parameter_pair(params=params, spec='spacing', param_id='center', **kwargs)
     
     def constrain_doublet(self, 
                           params=None,
@@ -622,9 +620,14 @@ class Fit:
         elif ratio == 'f':
             ratio = 3/4
             
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+            
         # constrain peak ratio and spacing
-        self.constrain_ratio(params=params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
-        self.constrain_spacing(params=params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
+        if ratio:
+            self.constrain_ratio(params=params, peak_ids=peak_ids, value=ratio, dict_keys=dict_keys)
+        if splitting:
+            self.constrain_spacing(params=params, peak_ids=peak_ids, value=splitting, dict_keys=dict_keys)
         
         if not constrain_gamma:
             pass
