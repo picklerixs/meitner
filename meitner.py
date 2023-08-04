@@ -147,6 +147,7 @@ class Fit:
                     display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
                     text=None,
                     residual_lim=[-3,3],
+                    envelope_zorder=False,
                     colors=None, component_z_spec=False, xdim=None, ydim=3.25, energy_axis='be',
                     save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
         if colors is None:
@@ -161,7 +162,12 @@ class Fit:
             norm_suffix = '_norm'
         else:
             norm_suffix = ''
+        if envelope_zorder == 'top':
+            self.envelope_zorder = 9999
+        elif (envelope_zorder == 'bottom') or (envelope_zorder == 'bot'):
+            self.envelope_zorder = 0
             
+        # includes leading underscore
         y_suffix = bg_suffix + norm_suffix
             
         if xdim is None:
@@ -203,7 +209,7 @@ class Fit:
             if display_components:
                 j = 0
                 for i in self.peak_ids[dk]:
-                    ds_dk['{}{}'.format(i, bg_suffix)].plot.line(ax=ax, color=colors[j], linewidth=self.component_linewidth)
+                    ds_dk['p{}{}'.format(i, bg_suffix)].plot.line(ax=ax, color=colors[j], linewidth=self.component_linewidth)
                     j += 1
 
             # if not isinstance(ax_kwargs, dict):
@@ -215,26 +221,27 @@ class Fit:
             #     ymax = max(df_key['cps'+y_suffix])
             #     ax.set_ylim([ymin-(ymax-ymin)*0.05,ymax*(1+ypad)])
             
-            # ax.set_ylabel(ylabel, fontsize=self.label_font_size)
-            # ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            ax.set_ylabel(ylabel, fontsize=self.label_font_size)
+            ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            ax.set_xlabel('')
             # if text != None:
             #     ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
             # # if tight_layout:
             # #     plt.tight_layout()
             # j += 1
             
-            # residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
-            # sns.lineplot(data=df_key, x=energy_axis, y='std_residuals', 
-            #                 ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
-            #                 ms=self.marker_size, mew=self.marker_edge_width)
-            # residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
+            residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
+            ds_dk['residual'].plot.line(
+                            ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
+                            ms=self.marker_size, mew=self.marker_edge_width)
+            residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
             # self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
-            # if energy_axis == 'be':
-            #     residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
-            #     residual_ax.invert_xaxis() # only need to invert one axis
-            # elif energy_axis == 'ke':
-            #     residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
-            # residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
+            if energy_axis == 'be':
+                residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
+                residual_ax.invert_xaxis() # only need to invert one axis
+            elif energy_axis == 'ke':
+                residual_ax.set_xlabel("Kinetic Energy (eV)", fontsize=self.label_font_size)
+            residual_ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             
             # fig.set_size_inches(xdim,ydim)
             # # if tight_layout:
@@ -256,6 +263,17 @@ class Fit:
                                 kws={
                                     'dict_keys': self.dict_keys,
                                     'n_peaks': self.n_peaks[0]})
+        # save component y-values
+        for dk in self.dict_keys:
+            ds_dk = self.xps[dk].ds
+            for i in self.peak_ids[dk]:
+                fn_params_ids = ['amplitude', 'center', 'sigma', 'gamma']
+                fn_params = [self.result.params['{}_p{}_{}'.format(dk, i, j)] for j in fn_params_ids]
+                fn = Fn.voigt(ds_dk['be'], *fn_params)
+                ds_dk['p{}_no_bg'.format(i)] = fn
+                ds_dk['p{}'.format(i)] = fn + ds_dk['bg_norm']
+                
+            
         
     def enforce_expr_constraints(self, params=None, expr_constraints=None):
         '''
