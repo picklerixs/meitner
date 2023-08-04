@@ -792,7 +792,7 @@ class Xps:
         if Aux.is_list_or_tuple(break_point_search_interval) and (break_point == 'search'):
             break_point_search_interval = [max(break_point_search_interval),
                                            min(break_point_search_interval)]
-            break_point = self.ds.sel(be=slice(*break_point_search_interval)).cps.idxmin().data
+            break_point = float(self.ds.sel(be=slice(*break_point_search_interval)).cps.idxmin().data)
             print()
             print('Found break point at {} eV.'.format(break_point))
             
