@@ -146,10 +146,17 @@ class Fit:
                     subtract_bg=True, normalize=True,
                     display_bg=False, display_envelope=True, display_components=True, display_residuals=True,
                     text=None,
-                    residual_lim=[-3,3],
+                    residual_ylim=False,
                     envelope_zorder=False,
                     colors=None, component_z_spec=False, xdim=None, ydim=3.25, energy_axis='be',
+                    yticks=False,
+                    height_ratio=7.5, # ratio of main plot to residual plot
                     save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
+        '''
+        Args:
+            display_residuals: If True or 'residuals', adds a plot of unscaled residuals. If 'std' or 'std_residuals', adds
+                a plot of standardized residuals.
+        '''
         if colors is None:
             colors = self.colors
             
@@ -183,14 +190,12 @@ class Fit:
         for dk in self.dict_keys:
             # use gridspec to combine main and residual plots
             fig = plt.figure(layout='constrained')
-            gs = fig.add_gridspec(2, hspace=0, height_ratios=[5,1])
+            gs = fig.add_gridspec(2, hspace=0, height_ratios=[height_ratio,1])
             ax, residual_ax = gs.subplots(sharex=True,sharey=False)
             ds_dk = self.xps[dk].ds
             
             xmin = float(ds_dk[energy_axis].min().data)
             xmax = float(ds_dk[energy_axis].max().data)
-            print(xmin)
-            print(xmax)
             
             ds_dk['cps'+y_suffix].plot.line(ax=ax, mec=self.data_color, marker=self.marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width, zorder=self.data_zorder)
@@ -224,17 +229,32 @@ class Fit:
             ax.set_ylabel(ylabel, fontsize=self.label_font_size)
             ax.tick_params(axis='both', which='major', labelsize=self.tick_font_size)
             ax.set_xlabel('')
+            
+            ylim = ax.get_ylim()
+            dy = max(ylim) - min(ylim)
             # if text != None:
             #     ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
             # # if tight_layout:
             # #     plt.tight_layout()
             # j += 1
             
+            if (display_residuals == True) or (display_residuals == 'residuals'):
+                residual_prefix = ''
+            elif (display_residuals == 'std') or (display_residuals == 'std_residuals'):
+                residual_prefix = 'std_'
+            if residual_ylim == False:
+                if (display_residuals == True) or (display_residuals == 'residuals'):
+                    residual_ylim = [-dy/2/height_ratio, dy/2/height_ratio]
+                elif (display_residuals == 'std') or (display_residuals == 'std_residuals'):
+                    residual_ylim = [-3, 3]
+            
             residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
-            ds_dk['residual'].plot.line(
+            ds_dk[residual_prefix+'residual'].plot.line(
                             ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width)
             residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
+            residual_ax.set_ylim(residual_ylim)
+            residual_ax.ticklabel_format(axis='y', style='sci', scilimits=(-1,2))
             # self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
             if energy_axis == 'be':
                 residual_ax.set_xlabel("Binding Energy (eV)", fontsize=self.label_font_size)
@@ -324,7 +344,7 @@ class Fit:
                                                        dk=dk,
                                                        model=model,
                                                        n_peaks=n_peaks)
-        ds['residual'] = ds['model_no_bg'] - ds['cps_no_bg_norm']
+        ds['residual'] = ds['cps_no_bg_norm'] - ds['model_no_bg']
         ds['std_residual'] = ds['residual']/ds['residual'].std()
         ds['model'] = ds['model_no_bg'] + ds['bg_norm']
         
