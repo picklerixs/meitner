@@ -67,7 +67,8 @@ class Fit:
                  expr_constraints=None,
                  params=None,
                  method='leastsq',
-                 peak_ids=None):
+                 peak_ids=None,
+                 shift=False):
         '''
         Args:
             xps: Xps instance or list or dict of Xps instances
@@ -758,12 +759,15 @@ class Xps:
                  ds, 
                  be_range=None, 
                  method='area', 
+                 shift=False,
                  **kwargs):
         self.ds = ds
         # preprocessing
+        if shift:
+            self.shift(shift)
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
-        # automatically fits background (bg) and background-subtracted data (cps_no_bg)
+        # automatically fits background (bg) and stores background-subtracted data (cps_no_bg)
         if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
         # automatically computes normalized data:
@@ -776,6 +780,10 @@ class Xps:
         if vamas_kwargs is None:
             vamas_kwargs = {}
         return cls(Vms.import_single_vamas(path=path, region_id=region_id, **vamas_kwargs), **kwargs)
+    
+    def shift(self, shift):
+        self.ds['be'] = self.ds['be'] + shift
+        self.ds['ke'] = self.ds['ke'] - shift
     
     def fit_background(self,
                        background='shirley',
