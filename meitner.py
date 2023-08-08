@@ -93,6 +93,12 @@ class Fit:
         if Aux.is_float_or_int(first_peak_index):
             first_peak_index = [first_peak_index for _ in range(len_xps)]
         self.first_peak_index = first_peak_index
+        if Aux.is_float_or_int(shift):
+            self.shift = [shift for _ in range(len_xps)]
+            
+        if shift is not None:
+            for i in range(len_xps):
+                self.xps[i].shift(shift[i])
 
         # read or create dict_keys
         if Aux.is_list_or_tuple(dict_keys):
@@ -519,6 +525,7 @@ class Fit:
         # TODO support n_peaks with different spec for each entry in dict_keys
         elif peak_ids == 'all':
             peak_ids = [i for i in range(reference_peak_id+1, n_peaks[0], 1)]
+        print(peak_ids)
         self.constrain_parameter_to_reference(params=params,
                                               peak_ids=peak_ids,
                                               reference_peak_id=reference_peak_id,
@@ -640,8 +647,13 @@ class Fit:
                           dict_keys=None,
                           gamma_spacing_value=0,
                           gamma_spacing_min=0,
-                          gamma_spacing_max=np.inf,
-                          constrain_gamma=True):
+                          gamma_spacing_max=1,
+                          constrain_gamma=True,
+                          constrain_sigma=True,
+                          sigma_value=0.5,
+                          sigma_min=0,
+                          sigma_max=2,
+                          sigma_vary=True):
         '''
         Constrains one pair of doublet peaks. Wrapper for constrain_parameter_pair().
         
@@ -688,6 +700,16 @@ class Fit:
                                             vary=vary_gamma,
                                             min=gamma_spacing_min,
                                             max=gamma_spacing_max)
+        if constrain_sigma:
+            self.constrain_all_gaussian_width(params=params,
+                                                peak_ids=peak_ids,
+                                                reference_peak_id=peak_ids[-1],
+                                                n_peaks=2,
+                                                dict_keys=dict_keys,
+                                                vary=sigma_vary,
+                                                value=sigma_value,
+                                                min=sigma_min,
+                                                max=sigma_max)
 
 
     def init_peak(self, 
