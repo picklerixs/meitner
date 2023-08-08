@@ -137,7 +137,7 @@ class Fit:
                                     param_id='amplitude',
                                     # dict_keys=self.dict_keys,
                                     peak_ids=self.peak_ids,
-                                    value=1/self.n_peaks)
+                                    value=1/max(self.n_peaks))
         else:
             self.params = params
             
@@ -207,7 +207,8 @@ class Fit:
             
             ds_dk['cps'+y_suffix].plot.line(ax=ax, mec=self.data_color, marker=self.marker, ls='None',
                             ms=self.marker_size, mew=self.marker_edge_width, zorder=self.data_zorder)
-            if display_bg:
+            
+            if display_bg and ('bg' in list(ds_dk.data_vars)):
                 if subtract_bg:
                     ax.hlines(0, xmin, xmax,
                                colors=self.background_color,
@@ -216,14 +217,15 @@ class Fit:
                 else:
                     ds_dk['bg'+norm_suffix].plot.line(ax=ax, color=self.background_color, linewidth=self.background_linewidth, zorder=self.background_zorder)
             
-            if display_envelope:
-                ds_dk['model'+bg_suffix].plot.line(ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=self.envelope_zorder)
-            
-            if display_components:
-                j = 0
-                for i in self.peak_ids[dk]:
-                    ds_dk['p{}{}'.format(i, bg_suffix)].plot.line(ax=ax, color=colors[j], linewidth=self.component_linewidth)
-                    j += 1
+            if ('model' in list(ds_dk.data_vars)):
+                if display_envelope:
+                    ds_dk['model'+bg_suffix].plot.line(ax=ax, color=self.envelope_color, linewidth=self.envelope_linewidth, zorder=self.envelope_zorder)
+                
+                if display_components:
+                    j = 0
+                    for i in self.peak_ids[dk]:
+                        ds_dk['p{}{}'.format(i, bg_suffix)].plot.line(ax=ax, color=colors[j], linewidth=self.component_linewidth)
+                        j += 1
 
             # if not isinstance(ax_kwargs, dict):
             #     ax_kwargs = {}
@@ -257,9 +259,10 @@ class Fit:
                     residual_ylim = [-3, 3]
             
             residual_ax.axhline(y=0, color=self.envelope_color, linestyle='--', linewidth=self.axes_linewidth, alpha=0.5)
-            ds_dk[residual_prefix+'residual'].plot.line(
-                            ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
-                            ms=self.marker_size, mew=self.marker_edge_width)
+            if 'residual' in list(ds_dk.data_vars):
+                ds_dk[residual_prefix+'residual'].plot.line(
+                                ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
+                                ms=self.marker_size, mew=self.marker_edge_width)
             residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
             residual_ax.set_ylim(residual_ylim)
             residual_ax.ticklabel_format(axis='y', style='sci', scilimits=(-1,2))
@@ -812,7 +815,7 @@ class Xps:
         # automatically computes normalized data:
         # cps_norm, bg_norm, and cps_no_bg_norm
         if 'cps_no_bg_norm' not in list(ds.data_vars):
-            Processing.normalize(self.ds, method=method)
+            [self.delta_y, self.total_area] = Processing.normalize(self.ds, method=method)
         
     @classmethod
     def from_vamas(cls, path=None, region_id=None, vamas_kwargs=None, **kwargs):
@@ -828,6 +831,7 @@ class Xps:
                        background='shirley',
                        break_point=None,
                        break_point_search_interval=None,
+                       break_point_offset=0,
                        **kwargs):
         '''
         Wrapper for Bg.shirley()
@@ -853,7 +857,11 @@ class Xps:
             if (background == 'shirley') or (background == 's'):
                 i = 0
                 for ds in ds_list:
-                    ds['bg'] = ('be', Bg.shirley(ds['cps'], **kwargs))
+                    if i == 0:
+                        y_offset = (0, break_point_offset)
+                    else:
+                        y_offset = (break_point_offset, 0)
+                    ds['bg'] = ('be', Bg.shirley(ds['cps'], y_offset=y_offset, **kwargs))
                     if i > 0:
                         ds_list[i] = ds.drop_isel(be=0)
                     i += 1
@@ -913,13 +921,18 @@ class Processing:
         ymin = ds.min(dim='be')[y]
         ymax = ds.max(dim='be')[y]
         
+        delta_y = float(ymax - ymin)
+        total_area = abs(trapezoid((ds[y] - ymin), x=ds['be']))
+        
         if method == 'minmax':
-            norm_constant = ymax - ymin
+            norm_constant = delta_y
         if method == 'area':
-            norm_constant = abs(trapezoid((ds[y] - ymin), x=ds['be']))
+            norm_constant = total_area
             
         for y in ['bg','cps','cps_no_bg']:
-            ds['{}_norm'.format(y)] = (ds[y] - ymin)/norm_constant
+            if y in list(ds.data_vars):
+                ds['{}_norm'.format(y)] = (ds[y] - ymin)/norm_constant
+        return delta_y, total_area
 
 class Bg:
     '''
@@ -928,7 +941,7 @@ class Bg:
     @staticmethod
     # stolen from pyARPES
     def shirley(
-        xps: np.ndarray, eps=1e-7, max_iters=500, n_samples=(5,5)
+        xps: np.ndarray, eps=1e-7, max_iters=500, n_samples=(5,5), y_offset=(0,0),
     ) -> np.ndarray:
         """Core routine for calculating a Shirley background on np.ndarray data."""
         background = np.copy(xps)
@@ -937,8 +950,8 @@ class Bg:
 
         rel_error = np.inf
 
-        i_left = np.mean(xps[:n_samples[0]], axis=0)
-        i_right = np.mean(xps[-n_samples[1]:], axis=0)
+        i_left = np.mean(xps[:n_samples[0]], axis=0) + y_offset[0]
+        i_right = np.mean(xps[-n_samples[1]:], axis=0) + y_offset[1]
 
         iter_count = 0
 
