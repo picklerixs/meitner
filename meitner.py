@@ -133,6 +133,11 @@ class Fit:
                                     # dict_keys=self.dict_keys,
                                     peak_ids=self.peak_ids,
                                     value=be_guess)
+            self.guess_multi_component(params=self.params,
+                                    param_id='amplitude',
+                                    # dict_keys=self.dict_keys,
+                                    peak_ids=self.peak_ids,
+                                    value=1/self.n_peaks)
         else:
             self.params = params
             
@@ -523,6 +528,7 @@ class Fit:
                                          param_id='sigma',
                                          peak_ids=None,
                                          reference_peak_id=0,
+                                         reference_peak_key=None,
                                          dict_keys=None,
                                          vary=True,
                                          value=None,
@@ -537,15 +543,20 @@ class Fit:
             peak_ids = [peak_ids]
         for dk in dict_keys:
             prefix_dk = '{}_'.format(dk)
+            if reference_peak_key is None:
+                reference_prefix = prefix_dk
+            else:
+                reference_prefix = '{}_'.format(reference_peak_key)
             if value is not None:
-                params.add('{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id),
+                params.add('{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id),
                            value=value,
                            min=min,
                            max=max,
                            vary=vary)
             for peak_id in peak_ids:
-                params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
-                           expr='{}p{}_{}'.format(prefix_dk,reference_peak_id,param_id))
+                if (prefix_dk is not reference_prefix) and (peak_id is not reference_peak_id):
+                    params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
+                            expr='{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id))
         return
     
     
@@ -624,6 +635,9 @@ class Fit:
                           ratio=0.5,
                           splitting=1,
                           dict_keys=None,
+                          gamma_spacing_value=0,
+                          gamma_spacing_min=0,
+                          gamma_spacing_max=np.inf,
                           constrain_gamma=True):
         '''
         Constrains one pair of doublet peaks. Wrapper for constrain_parameter_pair().
@@ -666,11 +680,11 @@ class Fit:
                                             spec='spacing',
                                             param_id='gamma',
                                             peak_ids=peak_ids,
-                                            value=0,
+                                            value=gamma_spacing_value,
                                             dict_keys=dict_keys,
                                             vary=vary_gamma,
-                                            min=0,
-                                            max=np.inf)
+                                            min=gamma_spacing_min,
+                                            max=gamma_spacing_max)
 
 
     def init_peak(self, 
@@ -1145,7 +1159,7 @@ def match_spacings(peak_ids, dict_keys, expr_constraints, spacing_guess, spacing
                                                                                        'min': spacing_min[k], 'max': spacing_max[k]}})
                     k += 1
                     
-def constrain_doublet_gamma(peak_ids, dict_keys, expr_constraints, spacing_min=None, spacing_max=None):
+def constrain_doublet_gamma(peak_ids, dict_keys, expr_constraints, spacing_value=None, spacing_min=None, spacing_max=None):
     '''
     peak_ids: list only id of first peak in doublet!
     '''
