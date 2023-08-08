@@ -126,9 +126,11 @@ class Fit:
                             lineshape=lineshape,
                             first_peak_index=self.first_peak_index,
                             dict_keys=self.dict_keys)
+            if be_guess is None:
+                be_guess = np.finfo(float).eps
             self.guess_multi_component(params=self.params,
                                     param_id='center',
-                                    dict_keys=self.dict_keys,
+                                    # dict_keys=self.dict_keys,
                                     peak_ids=self.peak_ids,
                                     value=be_guess)
         else:
@@ -385,12 +387,11 @@ class Fit:
     def guess_multi_component(self, 
                               params=None, 
                               param_id='center', 
-                              peak_ids=0, 
-                              value=0, 
+                              peak_ids=None, 
+                              value=np.finfo(float).eps, 
                               min=0, 
                               max=np.inf, 
-                              vary=True,
-                              dict_keys=None):
+                              vary=True):
         '''
         Sets initial value and bounds [min, max] for a single fit parameter in an lmfit Parameters instace for 
         one or more core-level regions given in dict_keys.
@@ -408,26 +409,33 @@ class Fit:
             min: Minimum parameter bound. Form analogous to peak_ids.
             max: Maximum parameter bound. Form analogous to peak_ids.
             vary: Fix or vary parameter value(s) from initial value.
-            dict_keys: list of keys corresponding to data to be fitted.
         '''
         if params is None:
             params = self.params
-        if dict_keys is None:
-            dict_keys = ['']
-        elif not Aux.is_list_or_tuple(dict_keys):
-            dict_keys = [dict_keys]
+        if peak_ids is None:
+            peak_ids = self.peak_ids
+            
+        dict_keys = self.dict_keys
+        # if dict_keys is None:
+        #     dict_keys = ['']
+        #     dict_keys = self.dict_keys
+        # elif not Aux.is_list_or_tuple(dict_keys):
+        #     dict_keys = [dict_keys]
         
+        # for handling multiple datasets
         peak_ids_dict = Aux.initialize_dict(peak_ids, dict_keys)
         value_dict = Aux.initialize_dict(value, dict_keys, ref_dict=peak_ids_dict)
         min_dict = Aux.initialize_dict(min, dict_keys, ref_dict=peak_ids_dict)
         max_dict = Aux.initialize_dict(max, dict_keys, ref_dict=peak_ids_dict)
 
+        # loop over all datasets
         for dk in dict_keys:
             peak_ids_dk = peak_ids_dict[dk]
             len_peak_ids = len(peak_ids_dk)
             value_dk = value_dict[dk]
             min_dk = min_dict[dk]
             max_dk = max_dict[dk]
+            # loop over all peak IDs
             for i in range(len_peak_ids):
                 prefix = '{}_p{}'.format(dk,peak_ids_dk[i])
                 self.guess_component_parameter(params=self.params, 
@@ -437,22 +445,39 @@ class Fit:
                                               max=max_dk[i],
                                               vary=vary,
                                               prefix=prefix)
+                
+    
         
     def guess_component_parameter(self,
                                   params=None, 
                                   param_id='center', 
-                                  value=0, 
+                                  value=np.finfo(float).eps, 
                                   min=0, 
                                   max=np.inf,
                                   vary=True,
                                   prefix=None, 
                                   **kwargs):
+        '''
+        Wrapper to set initial value and properties of a parameter in an lmfit Parameters instance.
+        
+        Args:
+            params: lmfit Parameters instance.
+            param_id: Parameter name.
+            value: Parameter value.
+            min: Minimum bound for parameter value.
+            max: Maximum bound for parameter value.
+            vary: Vary (True) or fix (False) parameter value during minimization.
+            prefix: Prepended to parameter name with syntax prefix_param_id.
+                Example: prefix='d0_p0' with param_id='center' specifies d0_p0_center.
+        '''
         if params is None:
             params = self.params
         if prefix is None:
             prefix_dk = ''
         else:
             prefix_dk = '{}_'.format(prefix)
+        if value is None:
+            value = np.finfo(float).eps
         params[prefix_dk+param_id].set(value=value, min=min, max=max, vary=vary, **kwargs)
     
     
