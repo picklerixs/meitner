@@ -568,6 +568,17 @@ class Fit:
                             expr='{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id))
         return
     
+    def link_parameters(self,
+                        full_param_ids,
+                        reference_param=None):
+        if reference_param is None:
+            reference_param = full_param_ids[0]
+        if isinstance(full_param_ids, str):
+            full_param_ids = [full_param_ids]
+        for id in full_param_ids:
+            if id != reference_param:
+                self.params.add(id, expr=reference_param)
+
     
     def constrain_parameter_pair(self,
                                  params=None,
@@ -602,7 +613,9 @@ class Fit:
             op = '+'
         peak_ids = Aux.encapsulate(peak_ids)
         # TODO ensure this will work for constraining peaks across multiple Xps instances
-        if not Aux.is_list_or_tuple(dict_keys):
+        if dict_keys is None:
+            dict_keys = self.dict_keys
+        elif not Aux.is_list_or_tuple(dict_keys):
             dict_keys = [None]
         # else:
         if not Aux.is_list_or_tuple(value):
