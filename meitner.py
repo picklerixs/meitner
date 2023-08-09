@@ -745,7 +745,11 @@ class Fit:
         param_values = dict(zip(param_ids, param_values))
         for param_ids_i in param_ids:
             # default value > 0 to prevent division by zero
-            params.add(prefix_dk+param_ids_i, value=param_values[param_ids_i], min=0, max=np.inf)
+            if param_ids_i in voigt_param_ids:
+                param_max = 2
+            else:
+                param_max = np.inf
+            params.add(prefix_dk+param_ids_i, value=param_values[param_ids_i], min=0, max=param_max)
         for param_ids_i in param_ids:
             if lineshape == 'voigt':
                 params.add(prefix_dk + 'fwhm',
