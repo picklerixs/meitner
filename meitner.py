@@ -1055,7 +1055,8 @@ class Vms:
                             path=None,
                             vms=False,
                             region_id=None,
-                            read_phi=False):
+                            read_phi=False,
+                            verbose=True):
             '''
             Wrapper for Vamas() to import XPS data into an Xarray Dataset.
             If path is specified, VAMAS data are loaded.
@@ -1079,14 +1080,16 @@ class Vms:
             ids = cls.read_vamas_blocks(vms=vms)
             n = len(ids)
             
-            print('Found ' + str(len(ids)) + ' blocks.')
-            print()
+            if verbose:
+                print('Found ' + str(len(ids)) + ' blocks.')
+                print()
             
             # check for and log duplicate block IDs
             duplicate_flag = n != len(set(ids))
             if duplicate_flag:
-                print('Detected multiple VAMAS blocks with the same name.')
-                print()
+                if verbose:
+                    print('Detected multiple VAMAS blocks with the same name.')
+                    print()
                 duplicate_ids = [id for id in ids if ids.count(id) > 1]
             
             # if region_id not specified, get user input
@@ -1121,8 +1124,9 @@ class Vms:
                 phi = 0
             # excitation energy
             hv = dataBlock.analysis_source_characteristic_energy
-            print("Excitation energy:")
-            print(str(hv) + " eV")
+            if verbose:
+                print("Excitation energy:")
+                print(str(hv) + " eV")
 
             
             # compute binding energy
