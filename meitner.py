@@ -68,7 +68,7 @@ class Fit:
                  params=None,
                  method='leastsq',
                  peak_ids=None,
-                 shift=False):
+                 shift=None):
         '''
         Args:
             xps: Xps instance or list or dict of Xps instances
@@ -525,7 +525,6 @@ class Fit:
         # TODO support n_peaks with different spec for each entry in dict_keys
         elif peak_ids == 'all':
             peak_ids = [i for i in range(reference_peak_id+1, n_peaks[0], 1)]
-        print(peak_ids)
         self.constrain_parameter_to_reference(params=params,
                                               peak_ids=peak_ids,
                                               reference_peak_id=reference_peak_id,
@@ -564,7 +563,7 @@ class Fit:
                            max=max,
                            vary=vary)
             for peak_id in peak_ids:
-                if (prefix_dk is not reference_prefix) and (peak_id is not reference_peak_id):
+                if (dk is not reference_peak_key) and (peak_id is not reference_peak_id):
                     params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
                             expr='{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id))
         return
