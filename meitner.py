@@ -853,6 +853,7 @@ class Xps:
                        break_point=None,
                        break_point_search_interval=None,
                        break_point_offset=0,
+                       n_samples=[10, 10],
                        **kwargs):
         '''
         Wrapper for Bg.shirley()
@@ -880,16 +881,18 @@ class Xps:
                 for ds in ds_list:
                     if i == 0:
                         y_offset = (0, break_point_offset)
+                        n_samples_offset = (n_samples[0], 1)
                     else:
                         y_offset = (break_point_offset, 0)
-                    ds['bg'] = ('be', Bg.shirley(ds['cps'], y_offset=y_offset, **kwargs))
+                        n_samples_offset = (1, n_samples[1])
+                    ds['bg'] = ('be', Bg.shirley(ds['cps'], y_offset=y_offset, n_samples=n_samples_offset, **kwargs))
                     if i > 0:
                         ds_list[i] = ds.drop_isel(be=0)
                     i += 1
                 self.ds = xr.concat(ds_list, dim='be')
         else:
             if (background == 'shirley') or (background == 's'):
-                self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], **kwargs))
+                self.ds['bg'] = ('be', Bg.shirley(self.ds['cps'], n_samples=n_samples, **kwargs))
         self.ds['cps_no_bg'] = ('be', (self.ds['cps'] - self.ds['bg']).data)
 
 class Aux:
