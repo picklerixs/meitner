@@ -847,6 +847,7 @@ class Xps:
             self.shift(shift)
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
+            print(self.ds)
         # automatically fits background (bg) and stores background-subtracted data (cps_no_bg)
         if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
