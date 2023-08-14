@@ -163,6 +163,7 @@ class Fit:
                     residual_ylim=False,
                     envelope_zorder=False,
                     colors=None, component_z_spec=False, xdim=None, ydim=3.25, energy_axis='be',
+                    xlim=False,
                     yticks=False,
                     height_ratio=7.5, # ratio of main plot to residual plot
                     save_fig=False, ypad=0, ylabel=None, ax_kwargs=None, **kwargs):
@@ -270,6 +271,8 @@ class Fit:
                                 ax=residual_ax, mec=self.data_color, marker=self.residual_marker, ls='None',
                                 ms=self.marker_size, mew=self.marker_edge_width)
             residual_ax.set_ylabel('R', style='italic', fontsize=self.label_font_size)
+            if Aux.is_list_or_tuple(xlim):
+                residual_ax.set_xlim([min(xlim), max(xlim)])
             residual_ax.set_ylim(residual_ylim)
             residual_ax.ticklabel_format(axis='y', style='sci', scilimits=(-1,2))
             # self.ax_opts(residual_ax, ylim=residual_lim, **ax_kwargs)
@@ -847,7 +850,6 @@ class Xps:
             self.shift(shift)
         if Aux.is_list_or_tuple(be_range):
             self.ds = self.ds.sel(be=slice(*be_range))
-            print(self.ds)
         # automatically fits background (bg) and stores background-subtracted data (cps_no_bg)
         if 'bg' not in list(self.ds.data_vars):
             self.fit_background(**kwargs)
