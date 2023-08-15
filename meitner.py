@@ -174,6 +174,8 @@ class Fit:
         '''
         if colors is None:
             colors = self.colors
+        else:
+            self.colors = colors
             
         if subtract_bg:
             bg_suffix = '_no_bg'
@@ -845,6 +847,10 @@ class Xps:
                  shift=False,
                  **kwargs):
         self.ds = ds
+        # get delta y before normalization (for shirley offset)
+        ymin = self.ds.min(dim='be')['cps']
+        ymax = self.ds.max(dim='be')['cps']
+        self.delta_y_approx = float(ymax - ymin)
         # preprocessing
         if shift:
             self.shift(shift)
@@ -852,11 +858,17 @@ class Xps:
             self.ds = self.ds.sel(be=slice(*be_range))
         # automatically fits background (bg) and stores background-subtracted data (cps_no_bg)
         if 'bg' not in list(self.ds.data_vars):
-            self.fit_background(**kwargs)
+            self.fit_background(delta_y=self.delta_y_approx, **kwargs)
         # automatically computes normalized data:
         # cps_norm, bg_norm, and cps_no_bg_norm
         if 'cps_no_bg_norm' not in list(ds.data_vars):
             [self.delta_y, self.total_area] = Processing.normalize(self.ds, method=method)
+            # if method == 'minmax':
+            #     norm_constant = self.delta_y
+            # elif method == 'area':
+            #     norm_constant = self.total_area
+            # print(ymin/norm_constant)
+            # self.ds['cps_no_bg'] = self.ds['cps_no_bg'] - ymin/norm_constant
         
     @classmethod
     def from_vamas(cls, path=None, region_id=None, vamas_kwargs=None, **kwargs):
@@ -874,6 +886,8 @@ class Xps:
                        break_point_search_interval=None,
                        break_point_offset=0,
                        n_samples=[10, 10],
+                       delta_y=None,
+                       offset_by_delta_y=False,
                        **kwargs):
         '''
         Wrapper for Bg.shirley()
@@ -891,6 +905,9 @@ class Xps:
             break_point = float(self.ds.sel(be=slice(*break_point_search_interval)).cps.idxmin().data)
             print()
             print('Found break point at {} eV.'.format(break_point))
+            
+        if Aux.is_float_or_int(delta_y) and offset_by_delta_y:
+            break_point_offset = break_point_offset*delta_y
             
         if Aux.is_float_or_int(break_point):
             ds_upper = self.ds.sel(be=slice(np.inf, break_point))
@@ -975,7 +992,7 @@ class Processing:
             
         for y in ['bg','cps','cps_no_bg']:
             if y in list(ds.data_vars):
-                ds['{}_norm'.format(y)] = (ds[y] - ymin)/norm_constant
+                ds['{}_norm'.format(y)] = ds[y]/norm_constant
         return delta_y, total_area
 
 class Bg:
