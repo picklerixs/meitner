@@ -80,6 +80,7 @@ class Fit:
             expr_constraints: expression constraints passed to Parameters instance.
                 Overwrites existing parameter specifications in params.
         '''
+        self.shift = shift
         self.expr_constraints = expr_constraints
         # ensure xps is iterable
         if (not Aux.is_list_or_tuple(xps)) and (not isinstance(xps,dict)):
@@ -95,10 +96,6 @@ class Fit:
         self.first_peak_index = first_peak_index
         if Aux.is_float_or_int(shift):
             self.shift = [shift for _ in range(len_xps)]
-            
-        if shift is not None:
-            for i in range(len_xps):
-                self.xps[i].shift(shift[i])
 
         # read or create dict_keys
         if Aux.is_list_or_tuple(dict_keys):
@@ -116,6 +113,13 @@ class Fit:
             
         for dk in self.dict_keys:
             self.xps[dk].ds['index'] = dk
+            
+        if Aux.is_list_or_tuple(self.shift):
+            self.shift = dict(zip(self.dict_keys, self.shift))
+            
+        if isinstance(shift, dict):
+            for dk in self.dict_keys:
+                self.xps[dk].shift(shift[dk])
             
         # ! ensure that this is kept updated if new peaks are added!
         if peak_ids is None:
@@ -410,7 +414,8 @@ class Fit:
                               value=np.finfo(float).eps, 
                               min=0, 
                               max=np.inf, 
-                              vary=True):
+                              vary=True,
+                              dict_keys=None):
         '''
         Sets initial value and bounds [min, max] for a single fit parameter in an lmfit Parameters instace for 
         one or more core-level regions given in dict_keys.
@@ -434,7 +439,8 @@ class Fit:
         if peak_ids is None:
             peak_ids = self.peak_ids
             
-        dict_keys = self.dict_keys
+        if dict_keys is None:
+            dict_keys = self.dict_keys
         # if dict_keys is None:
         #     dict_keys = ['']
         #     dict_keys = self.dict_keys
