@@ -733,6 +733,18 @@ class Fit:
                                                 value=sigma_value,
                                                 min=sigma_min,
                                                 max=sigma_max)
+            
+    def au_4f(self, value=84, min=70, max=100, **kwargs):
+        self.constrain_doublet(peak_ids=[1,0],
+                               ratio='f',
+                               splitting=3.67,
+                               **kwargs)
+        self.guess_multi_component(param_id='center',
+                                   peak_ids=0,
+                                   value=value,
+                                   min=min,
+                                   max=max)
+        self.fit()
 
 
     def init_peak(self, 
