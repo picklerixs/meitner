@@ -255,8 +255,8 @@ class Fit:
             
             ylim = ax.get_ylim()
             dy = max(ylim) - min(ylim)
-            # if text != None:
-            #     ax.text(0.85,0.85,text[j],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='center', verticalalignment='center')
+            if isinstance(text,str):
+                ax.text(0.05,0.9,text,fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='left', verticalalignment='center')
             # # if tight_layout:
             # #     plt.tight_layout()
             # j += 1
@@ -1132,6 +1132,7 @@ class Vms:
             
             # check for and log duplicate block IDs
             duplicate_flag = n != len(set(ids))
+            duplicate_ids = []
             if duplicate_flag:
                 if verbose:
                     print('Detected multiple VAMAS blocks with the same name.')
