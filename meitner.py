@@ -302,13 +302,14 @@ class Fit:
             self.ax_dict[dk] = ax
             self.residual_ax_dict[dk] = residual_ax
     
-    def fit(self, method='leastsq'):
+    def fit(self, method='leastsq', **kwargs):
         self.result = minimize(self.residual, 
                                 self.params, 
                                 method=method,
                                 kws={
                                     'dict_keys': self.dict_keys,
-                                    'n_peaks': self.n_peaks[0]})
+                                    'n_peaks': self.n_peaks[0]},
+                                **kwargs)
         # save component y-values
         for dk in self.dict_keys:
             ds_dk = self.xps[dk].ds
