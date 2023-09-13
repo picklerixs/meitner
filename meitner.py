@@ -574,7 +574,7 @@ class Fit:
                            max=max,
                            vary=vary)
             for peak_id in peak_ids:
-                if (dk is not reference_peak_key) and (peak_id is not reference_peak_id):
+                if (dk != reference_peak_key) and (peak_id != reference_peak_id):
                     params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
                             expr='{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id))
         return
