@@ -154,10 +154,26 @@ class Fit:
         # apply expression constraints
         self.enforce_expr_constraints(params=self.params,
                                       expr_constraints=self.expr_constraints)
+        
+        # self.xps_concat_indices = [len(x.ds['be']) for x in list(self.xps.values)]
+        # # self.xps_concat_indices = dict(zip(self.dict_keys, self.xps_concat_indices))
+        # self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        
+        xps_concat_list = []
+        self.xps_concat_indices = {}
+        
+        for dk in self.dict_keys:
+            xps_dk_ds = self.xps[dk].ds
+            xps_concat_list.append(xps_dk_ds)
+            self.xps_concat_indices.update({dk: len(xps_dk_ds['be'])})
+            
+        self.xps_concat = xr.concat(xps_concat_list, dim='be')
+        self.xps_concat['model_no_bg'] = self.xps_concat['cps_no_bg_norm']*0
+        
+        # TODO create empty columns for model_no_bg, residual, std_residual, and model if not already present
+        
         if fit:
             self.fit(method=method)
-        else:
-            self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
 
     
     def plot_separate(self, 
@@ -310,6 +326,12 @@ class Fit:
                                     'dict_keys': self.dict_keys,
                                     'n_peaks': self.n_peaks[0]},
                                 **kwargs)
+        for dk in self.dict_keys:
+            self.calculate_model_single_spectrum(self.xps[dk].ds, 
+                                                 self.result.params, 
+                                                 dk=dk, 
+                                                 model=0,
+                                                 n_peaks=self.n_peaks[0])
         # save component y-values
         for dk in self.dict_keys:
             ds_dk = self.xps[dk].ds
@@ -348,13 +370,36 @@ class Fit:
             dict_keys = self.dict_keys
         if xps is None:
             xps = self.xps
-        for dk in dict_keys:
-            self.calculate_model_single_spectrum(xps[dk].ds, 
-                                                 params, 
-                                                 dk=dk, 
-                                                 **kwargs)
-        self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        # for dk in dict_keys:
+        #     self.calculate_model_single_spectrum(xps[dk].ds, 
+        #                                          params, 
+        #                                          dk=dk, 
+        #                                          **kwargs)
+        # self.xps_concat = xr.concat([x.ds for x in list(self.xps.values())], dim='be')
+        self.calculate_model_concat_spectra(params, **kwargs)
         return self.xps_concat['residual']
+        
+    def calculate_model_concat_spectra(self,
+                                       params,
+                                        model=0,
+                                        n_peaks=0):
+        '''
+        Wrapper for model_single_spectrum(). Creates new columns in ds for model and residuals.
+        Always fits to normalized data.
+        '''
+        i = 0
+        j = 0
+        for dk in self.dict_keys:
+            j += self.xps_concat_indices[dk]
+            self.xps_concat['model_no_bg'][i:j] = self.model_single_spectrum(self.xps_concat['be'][i:j],
+                                                        params,
+                                                        dk=dk,
+                                                        model=model,
+                                                        n_peaks=n_peaks)
+            i = j
+        self.xps_concat['residual'] = self.xps_concat['cps_no_bg_norm'] - self.xps_concat['model_no_bg']
+        # self.xps_concat['std_residual'] = self.xps_concat['residual']/self.xps_concat['residual'].std()
+        self.xps_concat['model'] = self.xps_concat['model_no_bg'] + self.xps_concat['bg_norm']
         
     def calculate_model_single_spectrum(self,
                               ds,
@@ -575,7 +620,9 @@ class Fit:
                            max=max,
                            vary=vary)
             for peak_id in peak_ids:
-                if (dk != reference_peak_key) and (peak_id != reference_peak_id):
+                if (prefix_dk == reference_prefix) and (peak_id == reference_peak_id):
+                    pass
+                else:
                     params.add('{}p{}_{}'.format(prefix_dk,peak_id,param_id),
                             expr='{}p{}_{}'.format(reference_prefix,reference_peak_id,param_id))
         return
