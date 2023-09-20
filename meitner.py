@@ -498,6 +498,7 @@ class Fit:
         value_dict = Aux.initialize_dict(value, dict_keys, ref_dict=peak_ids_dict)
         min_dict = Aux.initialize_dict(min, dict_keys, ref_dict=peak_ids_dict)
         max_dict = Aux.initialize_dict(max, dict_keys, ref_dict=peak_ids_dict)
+        vary_dict = Aux.initialize_dict(vary, dict_keys, ref_dict=peak_ids_dict)
 
         # loop over all datasets
         for dk in dict_keys:
@@ -506,6 +507,7 @@ class Fit:
             value_dk = value_dict[dk]
             min_dk = min_dict[dk]
             max_dk = max_dict[dk]
+            vary_dk = vary_dict[dk]
             # loop over all peak IDs
             for i in range(len_peak_ids):
                 prefix = '{}_p{}'.format(dk,peak_ids_dk[i])
@@ -514,7 +516,7 @@ class Fit:
                                               value=value_dk[i],
                                               min=min_dk[i],
                                               max=max_dk[i],
-                                              vary=vary,
+                                              vary=vary_dk[i],
                                               prefix=prefix)
                 
     
@@ -1032,7 +1034,7 @@ class Aux:
                 x_dict.update({dk: [x for _ in range(len(ref_dict[dk]))]})
             return x_dict
         
-        if (cls.is_float_or_int(x) or (x is None)):
+        if (cls.is_float_or_int(x) or (isinstance(x, bool)) or (x is None)):
             x = [x for _ in range(len_list)]
         
         if cls.is_list_or_tuple(x):
