@@ -211,6 +211,9 @@ class Fit:
         elif (envelope_zorder == 'bottom') or (envelope_zorder == 'bot'):
             self.envelope_zorder = 0
             
+        if Aux.is_list_or_tuple(text):
+            text = dict(zip(self.dict_keys, text))
+            
         # includes leading underscore
         y_suffix = bg_suffix + norm_suffix
             
@@ -273,6 +276,8 @@ class Fit:
             dy = max(ylim) - min(ylim)
             if isinstance(text,str):
                 ax.text(0.05,0.9,text,fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='left', verticalalignment='center')
+            if isinstance(text,dict):
+                ax.text(0.05,0.9,text[dk],fontsize=self.label_font_size,transform = ax.transAxes, horizontalalignment='left', verticalalignment='center')
             # # if tight_layout:
             # #     plt.tight_layout()
             # j += 1
@@ -784,7 +789,7 @@ class Fit:
                                                 min=sigma_min,
                                                 max=sigma_max)
             
-    def au_4f(self, value=84, min=70, max=100, **kwargs):
+    def au_4f(self, value=84, min=70, max=100, display=False, **kwargs):
         self.constrain_doublet(peak_ids=[1,0],
                                ratio='f',
                                splitting=3.67,
@@ -795,6 +800,8 @@ class Fit:
                                    min=min,
                                    max=max)
         self.fit()
+        if display:
+            self.plot_separate()
 
 
     def init_peak(self, 
