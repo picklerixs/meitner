@@ -655,7 +655,9 @@ class Fit:
                                  dict_keys=None,
                                  vary=False,
                                  min=0,
-                                 max=np.inf):
+                                 max=np.inf,
+                                 param_min=0,
+                                 param_max=np.inf):
         '''
         For each pair of peaks in peak_ids, constrain the ratio or spacing of the specified parameter (param_id).
         For each pair [a,b], generates a new parameter with name dk_pa_pb_[param_id]_[type].
@@ -707,7 +709,9 @@ class Fit:
                 params.add('{}p{}_{}'.format(prefix_dk,peak_ids_i[0],param_id), 
                            expr='{}p{}_p{}_{}_{} {} {}p{}_{}'.format(prefix_dk,peak_ids_i[0],peak_ids_i[1],param_id,spec,
                                                                      op,
-                                                                     prefix_dk,peak_ids_i[1],param_id))
+                                                                     prefix_dk,peak_ids_i[1],param_id),
+                           min=param_min,
+                           max=param_max)
                 
     def constrain_ratio(self, params=None, **kwargs):
         '''Wrapper for constrain_parameter_pair() to constrain peak ratios.'''
