@@ -2331,7 +2331,7 @@ class Casa:
     fontsize=18
     labelsize=fontsize
     legendsize=fontsize
-    linewidth=3
+    linewidth=2.5
 
     font_family='Arial'
     axes_linewidth=2.25
@@ -2344,71 +2344,117 @@ class Casa:
     rc('font',**{'family':'sans-serif','sans-serif':[font_family]})
     rc('text', usetex=False)
     rcParams['axes.linewidth'] = axes_linewidth
-    
-    def __init__(self, path, skiprows=6, ncomps=0, norm='area', dropna=True):
-        if ncomps > 0:
-            comps = ['p{}'.format(i) for i in range(ncomps)]
-        else:
-            comps = []
-        comps = ['be','cps'] + comps + ['bg','envelope']
-        norm_target = 'envelope'
+
+    @staticmethod
+    def load_csv(path, norm='area', skiprows=7, norm_target='Envelope'):
         di = pd.read_csv(path, skiprows=skiprows)
-        if dropna:
-            di = di.dropna(axis=1)
-        for i in range(len(comps)):
-            di.columns.values[i] = comps[i]
-        for c in comps:
-            di[c+'_no_bg'] = di[c] - di['bg']
-        if norm == 'area':
-            denom = -trapezoid(di[norm_target], x=di['be'])
-        elif norm == 'minmax':
-            denom = max(di['cps_no_bg'])
-        for c in comps:
-            if norm == 'area':
-                di[c+'_norm'] = di[c+'_no_bg']/denom
-            elif norm == 'minmax':
-                di[c+'_norm'] = di[c+'_no_bg']/denom
-        di['residual_norm'] = di['cps_norm'] - di['envelope_norm']
-        di['residual'] = di['residual_norm']*denom
-        self.di = di
+        di = di.dropna(axis=1)
+        comps = []
+        norm_suffix = ''
+        n_cols = len(di.columns.values)
+        if n_cols > 4:
+            n_comps = int((len(di.columns.values) - 8)/2)
+        else:
+            n_comps = 0
+        if n_comps > 0:
+            for i in range(n_comps):
+                comps += ['p{} CPS'.format(i)]
+                di.columns.values[i+2] = 'p{}'.format(i)
+                di.columns.values[i+6+n_comps] = 'p{} CPS'.format(i)
+        comps += ['CPS']
         
-    def plot_single(self, di, color, xlim, ylim, savefig=False, dim=[4,3], ylabel='Intensity (a.u.)'):
+        bg_flag = 'Background CPS' in di.columns.values
+        comps_flag = n_comps > 0
+        if bg_flag:
+            comps += ['Background CPS']
+            norm_suffix = '_no_bg'
+        if comps_flag:
+            comps += ['Envelope CPS']
+            
+        if bg_flag:
+            for c in comps:
+                di[c+'_no_bg'] = di[c] - di['Background CPS']
+            min_cps = min(di['Background CPS'+norm_suffix])
+        else:
+            min_cps = min(di['CPS'+norm_suffix])
+        if norm == 'area':
+            denom = -trapezoid(di['CPS'+norm_suffix], x=di['B.E.'])
+        elif norm == 'minmax':
+            denom = max(di['CPS'+norm_suffix])-min_cps
+        for c in comps:
+            di[c+'_norm'] = (di[c] - min_cps)/denom
+            if norm_suffix == '_no_bg':
+                di[c+norm_suffix+'_norm'] = (di[c+norm_suffix] - min_cps)/denom
+                
+        if n_comps > 0:
+            di['residual'] = di['CPS'] - di['Envelope CPS']
+            di['residual_norm'] = di['CPS_norm'] - di['Envelope CPS_norm']
+        return di
+
+    @classmethod
+    def plot_single(cls, di, color, xlim, ylim, savefig=False, dim=[4,3], ylabel='Intensity (a.u.)', subtract_bg=False):
             fig, ax = plt.subplots(layout='constrained')
 
+            if subtract_bg:
+                bg_suffix = '_no_bg'
+            else:
+                bg_suffix = ''
+            
             shift = 0
-            ax.plot(di['BE'], di['CPS_norm']+shift, linewidth=self.linewidth, color=color, zorder=999)
-            ax.hlines(shift, 0, 999, color='gray', linewidth=self.linewidth*2/3, zorder=100+1)
+            ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift, linewidth=cls.linewidth, color=color, zorder=999)
+            ax.hlines(shift, 0, 999, color='gray', linewidth=cls.linewidth*2/3, zorder=100+1)
 
             Pes.ax_opts(ax, major_tick_multiple=5, minor_tick_multiple=1, xlim=xlim, ylim=ylim)
-            ax.set_ylabel(ylabel, fontsize=self.fontsize, labelpad=self.labelpad*2/3)
-            ax.set_xlabel('Binding Energy (eV)', fontsize=self.fontsize, labelpad=self.labelpad)
+            ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
+            ax.set_xlabel('Binding Energy (eV)', fontsize=cls.fontsize, labelpad=cls.labelpad)
             ax.invert_xaxis()
 
-            ax.tick_params(labelsize=self.fontsize)
-            ax.xaxis.set_tick_params(width=self.tick_linewidth, length=self.tick_length, which='major')
-            ax.xaxis.set_tick_params(width=self.tick_linewidth, length=self.tick_length*0.5, which='minor')
+            ax.tick_params(labelsize=cls.fontsize)
+            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
+            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
 
             fig.set_size_inches(*dim)
             if savefig:
                     fig.savefig(savefig)
                     
-    def plot_stack(self, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], ylabel='Intensity (a.u.)'):
+    @classmethod
+    def plot_stack(cls, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], ylabel='Intensity (a.u.)', subtract_bg=False, plot_comps=False, comp_color=None,
+                   plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1):
             fig, ax = plt.subplots(layout='constrained')
 
-            for i in range(len(data)):
-                    di = data[i]
-                    ax.plot(di['BE'], di['CPS_norm']+shift*i, linewidth=self.linewidth, color=color[i], zorder=999)
-                    if hline:
-                            ax.hlines(shift*i, 0, 999, color='gray', linewidth=self.linewidth*2/3, zorder=100+i+1)
+            if subtract_bg:
+                bg_suffix = '_no_bg'
+            else:
+                bg_suffix = ''
 
-            Pes.ax_opts(ax, major_tick_multiple=5, minor_tick_multiple=1, xlim=xlim, ylim=ylim)
-            ax.set_ylabel(ylabel, fontsize=self.fontsize, labelpad=self.labelpad*2/3)
-            ax.set_xlabel('Binding Energy (eV)', fontsize=self.fontsize, labelpad=self.labelpad)
+            for i in range(len(data)):
+                di = data[i]
+                if not plot_envelope:
+                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+                if hline:
+                    ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=1+i+1)
+                if plot_envelope:
+                    ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
+                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, 'k+', linewidth=cls.linewidth, zorder=200, color='#444444')
+                if plot_comps:
+                    n_comps = int(len([id for id in di.columns.values if 'p' in id])/5)
+                    for j in range(n_comps-1):
+                        if comp_color is None:
+                            comp_color_j = comp_color
+                        else:
+                            comp_color_j = comp_color[j]
+                        ax.plot(di['B.E.'], di['p{} CPS{}_norm'.format(j, bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
+                if plot_residuals:
+                    ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color='gray', zorder=100)
+
+            Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
+            ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
+            ax.set_xlabel('Binding Energy (eV)', fontsize=cls.fontsize, labelpad=cls.labelpad)
             ax.invert_xaxis()
 
-            ax.tick_params(labelsize=self.fontsize)
-            ax.xaxis.set_tick_params(width=self.tick_linewidth, length=self.tick_length, which='major')
-            ax.xaxis.set_tick_params(width=self.tick_linewidth, length=self.tick_length*0.5, which='minor')
+            ax.tick_params(labelsize=cls.fontsize)
+            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
+            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
 
             fig.set_size_inches(*dim)
             if savefig:
