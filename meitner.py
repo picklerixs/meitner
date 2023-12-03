@@ -2381,6 +2381,8 @@ class Casa:
             denom = -trapezoid(di['CPS'+norm_suffix], x=di['B.E.'])
         elif norm == 'minmax':
             denom = max(di['CPS'+norm_suffix])-min_cps
+        elif norm[0] == 'p':
+            denom = -trapezoid(di[norm+' CPS'+norm_suffix], x=di['B.E.'])
         for c in comps:
             di[c+'_norm'] = (di[c] - min_cps)/denom
             if norm_suffix == '_no_bg':
@@ -2418,8 +2420,8 @@ class Casa:
                     fig.savefig(savefig)
                     
     @classmethod
-    def plot_stack(cls, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], ylabel='Intensity (a.u.)', subtract_bg=False, plot_comps=False, comp_color=None,
-                   plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1):
+    def plot_stack(cls, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], xlabel='Binding Energy (eV)', ylabel='Intensity (a.u.)', subtract_bg=False, 
+                   plot_comps=False, comp_color=None, plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1):
             fig, ax = plt.subplots(layout='constrained')
 
             if subtract_bg:
@@ -2435,7 +2437,8 @@ class Casa:
                     ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=1+i+1)
                 if plot_envelope:
                     ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
-                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, 'k+', linewidth=cls.linewidth, zorder=200, color='#444444')
+                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, 'k+', linewidth=cls.linewidth, zorder=200, color='#444444',
+                            ms=cls.marker_size, mew=cls.marker_edge_width)
                 if plot_comps:
                     n_comps = int(len([id for id in di.columns.values if 'p' in id])/5)
                     for j in range(n_comps-1):
@@ -2449,13 +2452,14 @@ class Casa:
 
             Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
             ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
-            ax.set_xlabel('Binding Energy (eV)', fontsize=cls.fontsize, labelpad=cls.labelpad)
+            ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
             ax.invert_xaxis()
 
-            ax.tick_params(labelsize=cls.fontsize)
+            ax.tick_params(labelsize=cls.fontsize*0.75)
             ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
             ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
 
             fig.set_size_inches(*dim)
             if savefig:
                     fig.savefig(savefig)
+            return fig, ax
