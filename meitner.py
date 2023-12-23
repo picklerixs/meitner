@@ -2337,7 +2337,7 @@ class Casa:
     axes_linewidth=2.25
     tick_linewidth=axes_linewidth*.9
     tick_length=tick_linewidth*5
-    marker_size=9
+    marker_size=7
     marker_edge_width=linewidth/2
     labelpad=5
 
@@ -2455,7 +2455,7 @@ class Casa:
             ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
             ax.invert_xaxis()
 
-            ax.tick_params(labelsize=cls.fontsize*0.75)
+            ax.tick_params(labelsize=cls.fontsize)
             ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
             ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
 
