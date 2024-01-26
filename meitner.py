@@ -2202,15 +2202,15 @@ class Pes:
 # 		df = xas.df
 # 		df[y] = df[y] + offset*i
 # 		sns.lineplot(data=df, x='energy', y=y, ax=ax)
-# 		if is_tuple_or_list(legend):
+# 		if is_list_or_tuple(legend):
 # 			ax.text(min(df['energy']), offset*i, legend[i])
 # 		i += 1
-# 	if is_tuple_or_list(energy_range):
+# 	if is_list_or_tuple(energy_range):
 # 		ax.set_xlim(energy_range)
-# 	#if is_tuple_or_list(legend):
+# 	#if is_list_or_tuple(legend):
 # 		#ax.legend(legend)
 
-def is_tuple_or_list(x):
+def is_list_or_tuple(x):
     return isinstance(x,tuple) or isinstance(x,list)
 
 class Xas:
@@ -2250,7 +2250,7 @@ class Xas:
         if drop_zeros:
             idx = df[df['energy'] == 0].index
             df.drop(idx, inplace=True)
-        if is_tuple_or_list(energy_range):
+        if is_list_or_tuple(energy_range):
             idx = df[(df['energy'] < min(energy_range)) | (df['energy'] > max(energy_range))].index
             df.drop(idx, inplace=True)
         df['intensity'] = df['counts']/df['i0']
@@ -2276,12 +2276,12 @@ class Xas:
             df = xas.df
             df[y] = df[y] + offset*i
             series = sns.lineplot(data=df, x='energy', y=y, ax=ax)
-            if is_tuple_or_list(legend):
+            if is_list_or_tuple(legend):
                 ax.text(min(df['energy']), offset*i, legend[i])
             i += 1
-        if is_tuple_or_list(energy_range):
+        if is_list_or_tuple(energy_range):
             ax.set_xlim(energy_range)
-        #if is_tuple_or_list(legend):
+        #if is_list_or_tuple(legend):
             #ax.legend(legend)
 
     @staticmethod
@@ -2289,7 +2289,7 @@ class Xas:
         norm_intensity_arr = []
         for xas in data_list:
             df = xas.df
-            if is_tuple_or_list(energy_range):
+            if is_list_or_tuple(energy_range):
                 energy_range_idx = df[(df['energy'] < min(energy_range)) | (df['energy'] > max(energy_range))].index
                 df.drop(energy_range_idx, inplace=True)
             norm_intensity_arr.append(df['norm_intensity'])
@@ -2319,7 +2319,7 @@ class Xas:
         fig, ax = plt.subplots(2,1,sharex=True,sharey=False)
         Xas.stack_spectra(data_list, ax_spec=ax[0])
         xas = Xas.average_spectra(data_list, ax_spec=ax[1])
-        if is_tuple_or_list(xlim):
+        if is_list_or_tuple(xlim):
             for axi in ax:
                 axi.set_xlim(left=min(xlim),right=max(xlim))
         fig.set_size_inches(3.25,3.25*1.618)
@@ -2421,7 +2421,8 @@ class Casa:
                     
     @classmethod
     def plot_stack(cls, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], xlabel='Binding Energy (eV)', ylabel='Intensity (a.u.)', subtract_bg=False, 
-                   plot_comps=False, comp_color=None, plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1):
+                   plot_comps=False, comp_color=None, plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1,
+                   comp_id=None):
             fig, ax = plt.subplots(layout='constrained')
 
             if subtract_bg:
@@ -2429,24 +2430,34 @@ class Casa:
             else:
                 bg_suffix = ''
 
+            if Aux.is_float_or_int(comp_id) and (comp_id is not None):
+                comp_id = [comp_id]
+            if Aux.is_list_or_tuple(comp_id):
+                comp_id = ['p{}'.format(k) for k in comp_id]
+
             for i in range(len(data)):
                 di = data[i]
                 if not plot_envelope:
                     ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
                 if hline:
-                    ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=1+i+1)
+                    ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
                 if plot_envelope:
                     ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
-                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, 'k+', linewidth=cls.linewidth, zorder=200, color='#444444',
+                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, marker='+', linewidth=cls.linewidth, zorder=200, color='#444444',
                             ms=cls.marker_size, mew=cls.marker_edge_width)
                 if plot_comps:
-                    n_comps = int(len([id for id in di.columns.values if 'p' in id])/5)
-                    for j in range(n_comps-1):
+                    # get component IDs and number of components
+                    comp_id_i = [id for id in di.columns.values if 'p' in id]
+                    n_comps_i = int(len(comp_id_i)/5)
+                    if Aux.is_list_or_tuple(comp_id):
+                        comp_id_i = [k for k in comp_id if k in comp_id_i]
+                        n_comps_i = int(len(comp_id_i))
+                    for j in range(n_comps_i):
                         if comp_color is None:
                             comp_color_j = comp_color
                         else:
                             comp_color_j = comp_color[j]
-                        ax.plot(di['B.E.'], di['p{} CPS{}_norm'.format(j, bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
+                        ax.plot(di['B.E.'], di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
                 if plot_residuals:
                     ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color='gray', zorder=100)
 
