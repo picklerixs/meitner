@@ -14,6 +14,7 @@ from lmfit.models import LinearModel
 from operator import itemgetter
 from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from matplotlib.lines import Line2D
 
 
 class Fit:
@@ -2343,6 +2344,7 @@ class Casa:
 
     rc('font',**{'family':'sans-serif','sans-serif':[font_family]})
     rc('text', usetex=False)
+    rcParams["mathtext.default"] = 'regular'
     rcParams['axes.linewidth'] = axes_linewidth
 
     @staticmethod
@@ -2429,16 +2431,29 @@ class Casa:
         # KWARGS
         comp_id=None,
         comp_color=None, 
+        comp_line=True,
+        comp_line_alpha=0.5,
+        comp_fill=False,
+        comp_fill_alpha=0.25,
+        data_color='gray',
+        data_style='markers',
         dim=[4,3], 
+        envelope_color='match',
         hline=True, 
+        legend=True,
+        legend_loc='upper right',
         plot_comps=False, 
         plot_envelope=False, 
         plot_residuals=False, 
+        residual_color='gray',
         residual_offset=-0.15, 
         savefig=False, 
         shift=0, 
         subtract_bg=False, 
+        top_text=None,
         major_tick_multiple=5, 
+        marker='.',
+        marker_alpha=0.5,
         minor_tick_multiple=1,
         xlabel='Binding Energy (eV)', 
         ylabel='Intensity (a.u.)'
@@ -2461,14 +2476,48 @@ class Casa:
 
         for i in range(len(data)):
             di = data[i]
-            if not plot_envelope:
-                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+            
+            if data_color == 'match':
+                data_color_i = color[i]
+            else:
+                data_color_i = data_color
+            if envelope_color == 'match':
+                envelope_color_i = color[i]
+            else:
+                envelope_color_i = envelope_color
+            if residual_color == 'match':
+                residual_color_i = color[i]
+            else:
+                residual_color_i = residual_color
+                
             if hline:
                 ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
+                
             if plot_envelope:
-                ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
-                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, marker='+', linewidth=cls.linewidth, zorder=200, color='#444444',
-                        ms=cls.marker_size, mew=cls.marker_edge_width)
+                # plot envelope
+                ax.plot(di['B.E.'], 
+                    di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, 
+                    linewidth=cls.linewidth, 
+                    color=envelope_color_i, 
+                    zorder=1000
+                )
+                
+            if data_style == 'markers':
+                # plot data as points
+                ax.plot(
+                    di['B.E.'], 
+                    di['CPS{}_norm'.format(bg_suffix)]+shift*i, 
+                    alpha=marker_alpha,
+                    marker=marker, 
+                    linewidth=cls.linewidth, 
+                    zorder=200, 
+                    color=data_color_i,
+                    ms=cls.marker_size, 
+                    mew=cls.marker_edge_width
+                )
+            elif data_style == 'lines':
+                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+                
             if plot_comps:
                 # get component IDs and number of components
                 comp_id_i = [id for id in di.columns.values if 'p' in id]
@@ -2476,25 +2525,71 @@ class Casa:
                 if Aux.is_list_or_tuple(comp_id):
                     comp_id_i = [k for k in comp_id if k in comp_id_i]
                     n_comps_i = int(len(comp_id_i))
-                for j in range(n_comps_i):
+                # subtract 1 to prevent plotting envelope as last component
+                for j in range(n_comps_i-1):
                     if comp_color is None:
                         comp_color_j = comp_color
                     else:
                         comp_color_j = comp_color[j]
-                    ax.plot(di['B.E.'], di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
+                    if comp_line:
+                        ax.plot(di['B.E.'], 
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, 
+                            linewidth=cls.linewidth*0.75, 
+                            color=comp_color_j, 
+                            zorder=100+i+1+j,
+                            alpha=comp_line_alpha
+                        )
+                    if comp_fill:
+                        ax.fill_between(di['B.E.'], 
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i,
+                            shift*i,
+                            color=comp_color_j,
+                            alpha=comp_fill_alpha
+                        )
+            
             if plot_residuals:
-                ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color='gray', zorder=100)
+                ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
-            Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
-            ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
-            ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
-            ax.invert_xaxis()
+        Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
+        ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
+        ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
+        ax.invert_xaxis()
 
-            ax.tick_params(labelsize=cls.fontsize)
-            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
-            ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
+        ax.tick_params(labelsize=cls.fontsize)
+        ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
+        ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length*0.5, which='minor')
 
-            fig.set_size_inches(*dim)
-            if savefig:
-                    fig.savefig(savefig)
+        fig.set_size_inches(*dim)
+        
+        if isinstance(top_text, str):
+            ax.text(
+                0.0125, 
+                1-0.02, 
+                top_text, 
+                horizontalalignment='left', 
+                verticalalignment='top',
+                transform=ax.transAxes,
+                fontsize=cls.fontsize,
+                weight='bold'
+            )
+            
+        if legend:
+            line = Line2D([0], [0], label='Fit', color='k', linewidth=cls.linewidth)
+            point = Line2D([0], [0], label='Data', marker=marker, markersize=cls.marker_size, 
+                    markeredgecolor='gray', markerfacecolor='gray', linestyle='', alpha=marker_alpha)
+            handles = [line,point]
+
+            ax.legend(handles=handles, 
+                loc=legend_loc,
+                frameon=False, 
+                fontsize=cls.fontsize, 
+                labelspacing=0.075/2, 
+                borderpad=0, 
+                handlelength=1, 
+                handletextpad=0.2
+            )
+
+            
+        if savefig:
+                fig.savefig(savefig)
         return fig, ax
