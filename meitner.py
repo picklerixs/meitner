@@ -2420,46 +2420,70 @@ class Casa:
                     fig.savefig(savefig)
                     
     @classmethod
-    def plot_stack(cls, data, color, xlim, ylim, shift=0, savefig=False, hline=True, dim=[4,3], xlabel='Binding Energy (eV)', ylabel='Intensity (a.u.)', subtract_bg=False, 
-                   plot_comps=False, comp_color=None, plot_envelope=False, plot_residuals=False, residual_offset=-0.15, major_tick_multiple=5, minor_tick_multiple=1,
-                   comp_id=None):
-            fig, ax = plt.subplots(layout='constrained')
+    def plot_stack(cls, 
+        # ARGS
+        data, 
+        color, 
+        xlim, 
+        ylim, 
+        # KWARGS
+        comp_id=None,
+        comp_color=None, 
+        dim=[4,3], 
+        hline=True, 
+        plot_comps=False, 
+        plot_envelope=False, 
+        plot_residuals=False, 
+        residual_offset=-0.15, 
+        savefig=False, 
+        shift=0, 
+        subtract_bg=False, 
+        major_tick_multiple=5, 
+        minor_tick_multiple=1,
+        xlabel='Binding Energy (eV)', 
+        ylabel='Intensity (a.u.)'
+    ):
+        # minimizes clipping and ensures figure conforms to dim
+        # more flexible than plt.tightlayout()
+        fig, ax = plt.subplots(layout='constrained')
 
-            if subtract_bg:
-                bg_suffix = '_no_bg'
-            else:
-                bg_suffix = ''
+        if subtract_bg:
+            bg_suffix = '_no_bg'
+        else:
+            bg_suffix = ''
 
+        # plot only specified components
+        if plot_comps:
             if Aux.is_float_or_int(comp_id) and (comp_id is not None):
                 comp_id = [comp_id]
             if Aux.is_list_or_tuple(comp_id):
                 comp_id = ['p{}'.format(k) for k in comp_id]
 
-            for i in range(len(data)):
-                di = data[i]
-                if not plot_envelope:
-                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
-                if hline:
-                    ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
-                if plot_envelope:
-                    ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
-                    ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, marker='+', linewidth=cls.linewidth, zorder=200, color='#444444',
-                            ms=cls.marker_size, mew=cls.marker_edge_width)
-                if plot_comps:
-                    # get component IDs and number of components
-                    comp_id_i = [id for id in di.columns.values if 'p' in id]
-                    n_comps_i = int(len(comp_id_i)/5)
-                    if Aux.is_list_or_tuple(comp_id):
-                        comp_id_i = [k for k in comp_id if k in comp_id_i]
-                        n_comps_i = int(len(comp_id_i))
-                    for j in range(n_comps_i):
-                        if comp_color is None:
-                            comp_color_j = comp_color
-                        else:
-                            comp_color_j = comp_color[j]
-                        ax.plot(di['B.E.'], di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
-                if plot_residuals:
-                    ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color='gray', zorder=100)
+        for i in range(len(data)):
+            di = data[i]
+            if not plot_envelope:
+                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+            if hline:
+                ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
+            if plot_envelope:
+                ax.plot(di['B.E.'], di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=1000)
+                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, marker='+', linewidth=cls.linewidth, zorder=200, color='#444444',
+                        ms=cls.marker_size, mew=cls.marker_edge_width)
+            if plot_comps:
+                # get component IDs and number of components
+                comp_id_i = [id for id in di.columns.values if 'p' in id]
+                n_comps_i = int(len(comp_id_i)/5)
+                if Aux.is_list_or_tuple(comp_id):
+                    comp_id_i = [k for k in comp_id if k in comp_id_i]
+                    n_comps_i = int(len(comp_id_i))
+                for j in range(n_comps_i):
+                    if comp_color is None:
+                        comp_color_j = comp_color
+                    else:
+                        comp_color_j = comp_color[j]
+                    ax.plot(di['B.E.'], di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, linewidth=cls.linewidth*0.75, color=comp_color_j, zorder=100+i+1+j)
+            if plot_residuals:
+                ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color='gray', zorder=100)
 
             Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
             ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
@@ -2473,4 +2497,4 @@ class Casa:
             fig.set_size_inches(*dim)
             if savefig:
                     fig.savefig(savefig)
-            return fig, ax
+        return fig, ax
