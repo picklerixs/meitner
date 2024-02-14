@@ -2455,12 +2455,19 @@ class Casa:
         marker='.',
         marker_alpha=0.5,
         minor_tick_multiple=1,
-        xlabel='Binding Energy (eV)', 
+        x_energy='B.E.',
+        xlabel=None, 
         ylabel='Intensity (a.u.)'
     ):
         # minimizes clipping and ensures figure conforms to dim
         # more flexible than plt.tightlayout()
         fig, ax = plt.subplots(layout='constrained')
+        
+        if not isinstance(xlabel, str):
+            if x_energy == 'K.E.':
+                xlabel = 'Kinetic Energy (eV)'
+            else:
+                xlabel = 'Binding Energy (eV)'
 
         if subtract_bg:
             bg_suffix = '_no_bg'
@@ -2495,7 +2502,7 @@ class Casa:
                 
             if plot_envelope:
                 # plot envelope
-                ax.plot(di['B.E.'], 
+                ax.plot(di[x_energy], 
                     di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, 
                     linewidth=cls.linewidth, 
                     color=envelope_color_i, 
@@ -2505,7 +2512,7 @@ class Casa:
             if data_style == 'markers':
                 # plot data as points
                 ax.plot(
-                    di['B.E.'], 
+                    di[x_energy], 
                     di['CPS{}_norm'.format(bg_suffix)]+shift*i, 
                     alpha=marker_alpha,
                     marker=marker, 
@@ -2515,8 +2522,8 @@ class Casa:
                     ms=cls.marker_size, 
                     mew=cls.marker_edge_width
                 )
-            elif data_style == 'lines':
-                ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+            elif data_style == 'line':
+                ax.plot(di[x_energy], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
                 
             if plot_comps:
                 # get component IDs and number of components
@@ -2532,7 +2539,7 @@ class Casa:
                     else:
                         comp_color_j = comp_color[j]
                     if comp_line:
-                        ax.plot(di['B.E.'], 
+                        ax.plot(di[x_energy], 
                             di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, 
                             linewidth=cls.linewidth*0.75, 
                             color=comp_color_j, 
@@ -2540,7 +2547,7 @@ class Casa:
                             alpha=comp_line_alpha
                         )
                     if comp_fill:
-                        ax.fill_between(di['B.E.'], 
+                        ax.fill_between(di[x_energy], 
                             di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i,
                             shift*i,
                             color=comp_color_j,
@@ -2548,12 +2555,13 @@ class Casa:
                         )
             
             if plot_residuals:
-                ax.plot(di['B.E.'], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
+                ax.plot(di[x_energy], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
         Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
         ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
         ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
-        ax.invert_xaxis()
+        if x_energy == 'B.E.':
+            ax.invert_xaxis()
 
         ax.tick_params(labelsize=cls.fontsize)
         ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
