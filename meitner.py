@@ -2348,7 +2348,7 @@ class Casa:
     rcParams['axes.linewidth'] = axes_linewidth
 
     @staticmethod
-    def load_csv(path, norm='area', skiprows=7, norm_target='Envelope'):
+    def load_csv(path, norm='area', skiprows=7, norm_target='Envelope', norm_point=None, norm_comp=None):
         di = pd.read_csv(path, skiprows=skiprows)
         di = di.dropna(axis=1)
         comps = []
@@ -2383,6 +2383,11 @@ class Casa:
             denom = -trapezoid(di['CPS'+norm_suffix], x=di['B.E.'])
         elif norm == 'minmax':
             denom = max(di['CPS'+norm_suffix])-min_cps
+        elif norm == 'point' and (isinstance(norm_point, float) or isinstance(norm_point, int)):
+            result_index = di['B.E.'].sub(norm_point).abs().idxmin()
+            denom = di['CPS'+norm_suffix][result_index]
+        elif norm == 'comp' and isinstance(norm_comp, int):
+            denom = -trapezoid(di['p{} CPS'.format(norm_comp)], x=di['B.E.'])
         elif norm[0] == 'p':
             denom = -trapezoid(di[norm+' CPS'+norm_suffix], x=di['B.E.'])
         for c in comps:
@@ -2442,6 +2447,7 @@ class Casa:
         hline=True, 
         legend=True,
         legend_loc='upper right',
+        linewidth=None,
         plot_comps=False, 
         plot_envelope=False, 
         plot_residuals=False, 
@@ -2462,6 +2468,9 @@ class Casa:
         # minimizes clipping and ensures figure conforms to dim
         # more flexible than plt.tightlayout()
         fig, ax = plt.subplots(layout='constrained')
+        
+        if isinstance(linewidth, int) or isinstance(linewidth, float):
+            cls.linewidth = linewidth
         
         if not isinstance(xlabel, str):
             if x_energy == 'K.E.':
@@ -2532,17 +2541,26 @@ class Casa:
                 if Aux.is_list_or_tuple(comp_id):
                     comp_id_i = [k for k in comp_id if k in comp_id_i]
                     n_comps_i = int(len(comp_id_i))
+                
+                if comp_color is None:
+                    comp_color_i = None
+                elif isinstance(comp_color, list):
+                    comp_color_i = comp_color
+                elif isinstance(comp_color, dict):
+                    comp_color_i = comp_color[i]
+                    
+                
                 # subtract 1 to prevent plotting envelope as last component
                 for j in range(n_comps_i-1):
-                    if comp_color is None:
-                        comp_color_j = comp_color
+                    if comp_color_i is None:
+                        comp_color_i_j = comp_color_i
                     else:
-                        comp_color_j = comp_color[j]
+                        comp_color_i_j = comp_color_i[j]
                     if comp_line:
                         ax.plot(di[x_energy], 
                             di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, 
                             linewidth=cls.linewidth*0.75, 
-                            color=comp_color_j, 
+                            color=comp_color_i_j, 
                             zorder=100+i+1+j,
                             alpha=comp_line_alpha
                         )
@@ -2550,7 +2568,7 @@ class Casa:
                         ax.fill_between(di[x_energy], 
                             di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i,
                             shift*i,
-                            color=comp_color_j,
+                            color=comp_color_i_j,
                             alpha=comp_fill_alpha
                         )
             
