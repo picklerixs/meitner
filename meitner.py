@@ -2463,7 +2463,8 @@ class Casa:
         minor_tick_multiple=1,
         x_energy='B.E.',
         xlabel=None, 
-        ylabel='Intensity (a.u.)'
+        ylabel='Intensity (a.u.)',
+        fontsize=None
     ):
         # minimizes clipping and ensures figure conforms to dim
         # more flexible than plt.tightlayout()
@@ -2471,6 +2472,9 @@ class Casa:
         
         if isinstance(linewidth, int) or isinstance(linewidth, float):
             cls.linewidth = linewidth
+            
+        if fontsize:
+            cls.fontsize=fontsize
         
         if not isinstance(xlabel, str):
             if x_energy == 'K.E.':
@@ -2619,3 +2623,11 @@ class Casa:
         if savefig:
                 fig.savefig(savefig)
         return fig, ax
+    
+    def plot_mesh(self,
+        data,
+        colormap,
+        xlim,
+        ylim
+    ):
+        pass
