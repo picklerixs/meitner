@@ -2548,10 +2548,12 @@ class Casa:
                 
                 if comp_color is None:
                     comp_color_i = None
-                elif isinstance(comp_color, list):
-                    comp_color_i = comp_color
+                # elif isinstance(comp_color, list):
+                #     comp_color_i = comp_color
                 elif isinstance(comp_color, dict):
                     comp_color_i = comp_color[i]
+                else:
+                    comp_color_i = comp_color
                     
                 
                 # subtract 1 to prevent plotting envelope as last component
