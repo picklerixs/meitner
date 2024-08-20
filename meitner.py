@@ -2438,7 +2438,7 @@ class Casa:
         comp_color=None, 
         comp_line=True,
         comp_line_alpha=0.5,
-        comp_fill=False,
+        comp_fill=True,
         comp_fill_alpha=0.25,
         data_color='gray',
         data_style='markers',
