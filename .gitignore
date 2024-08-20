@@ -131,3 +131,9 @@ dmypy.json
 # Figures
 *.png
 *.svg
+
+# Scripts
+pcn224ac.py
+fepcn224ac/
+#comfu4l.py
+#comfu4l/
