@@ -9,6 +9,8 @@ from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from matplotlib.lines import Line2D
 
+from aux import Aux
+
 
 class Casa:
     
