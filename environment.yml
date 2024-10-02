@@ -1,0 +1,15 @@
+name: meitner
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python
+  - ipykernel
+  - lmfit
+  - matplotlib
+  - numpy
+  - pandas
+  - scipy
+  - seaborn
+  - xarray
