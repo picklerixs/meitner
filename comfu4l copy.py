@@ -1,6 +1,7 @@
-import meitner
 import pathlib
 import matplotlib.pyplot as plt
+
+from meitner.casa import Casa
 
 def main():
     stem = 'comfu4l/echem/'
@@ -10,13 +11,13 @@ def main():
     path_list = [stem + 'cootfs1_0003.csv', stem + 'coechem1_0003.csv']
     for path in path_list:
         path = pathlib.Path(path)
-        meitner.Casa.font_family = 'arial'
-        df = meitner.Casa.load_csv(
+        Casa.font_family = 'arial'
+        df = Casa.load_csv(
             path
         )
         data.append(df)
         print(df)
-    meitner.Casa.plot_stack(
+    Casa.plot_stack(
         data,
         color,
         [771, 809],
@@ -34,20 +35,21 @@ def main():
         plot_comps=True,
         comp_id=[0,1,2,3],
         comp_color=comp_color,
-        savefig='comfu4l/echem/fig/co2p.svg'
+        savefig=False
+        # savefig='comfu4l/echem/fig/co2p.svg'
     )
     
     data = []
     path_list = [stem + 'cootfs1_0002.csv', stem + 'coechem1_0002.csv']
     for path in path_list:
         path = pathlib.Path(path)
-        meitner.Casa.font_family = 'arial'
-        df = meitner.Casa.load_csv(
+        Casa.font_family = 'arial'
+        df = Casa.load_csv(
             path
         )
         data.append(df)
         print(df)
-    meitner.Casa.plot_stack(
+    Casa.plot_stack(
         data,
         color,
         [680.5, 695.5],
@@ -62,20 +64,21 @@ def main():
         data_style='line',
         data_color=color,
         legend=False,
-        savefig='comfu4l/echem/fig/f1s.svg'
+        savefig=False
+        # savefig='comfu4l/echem/fig/f1s.svg'
     )
     
     data = []
     path_list = [stem + 'cootfs1_0001.csv', stem + 'coechem1_0001.csv']
     for path in path_list:
         path = pathlib.Path(path)
-        meitner.Casa.font_family = 'arial'
-        df = meitner.Casa.load_csv(
+        Casa.font_family = 'arial'
+        df = Casa.load_csv(
             path
         )
         data.append(df)
         print(df)
-    meitner.Casa.plot_stack(
+    Casa.plot_stack(
         data,
         color,
         [162.5, 175.5],
@@ -92,7 +95,8 @@ def main():
         legend=True,
         plot_comps=True,
         comp_color=comp_color,
-        savefig='comfu4l/echem/fig/s2p.svg'
+        savefig=False
+        # savefig='comfu4l/echem/fig/s2p.svg'
     )
     plt.show()
 
