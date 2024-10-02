@@ -1,3 +1,5 @@
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+
 class Aux:
     '''
     Aux methods.
@@ -42,3 +44,26 @@ class Aux:
             x_dict = x
         return x_dict
      
+    @staticmethod
+    def ax_opts(ax, xlim=None, ylim=None, xticks=False, yticks=False, tick_direction='out',
+                major_tick_multiple=0, minor_tick_multiple=0):
+        if xlim != None:
+            ax.set_xlim([min(xlim),max(xlim)])
+        if ylim != None:
+            ax.set_ylim(ylim)
+            
+        if xticks != False:
+            ax.set_xticks(xticks)
+        if yticks == False:
+            ax.set_yticks([])
+        elif yticks == True:
+            ax.set_yticks()
+        else:
+            ax.set_yticks(yticks)
+            
+        ax.tick_params(direction=tick_direction)
+        # specifying major_tick_multiple overrides manual xticks spec
+        if major_tick_multiple > 0:
+            ax.xaxis.set_major_locator(MultipleLocator(major_tick_multiple))
+        if minor_tick_multiple > 0:
+            ax.xaxis.set_minor_locator(MultipleLocator(minor_tick_multiple))

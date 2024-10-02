@@ -9,7 +9,7 @@ from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from matplotlib.lines import Line2D
 
-from aux import Aux
+from meitner.aux import Aux
 
 
 class Casa:
@@ -98,7 +98,7 @@ class Casa:
             ax.plot(di['B.E.'], di['CPS{}_norm'.format(bg_suffix)]+shift, linewidth=cls.linewidth, color=color, zorder=999)
             ax.hlines(shift, 0, 999, color='gray', linewidth=cls.linewidth*2/3, zorder=100+1)
 
-            Pes.ax_opts(ax, major_tick_multiple=5, minor_tick_multiple=1, xlim=xlim, ylim=ylim)
+            Aux.ax_opts(ax, major_tick_multiple=5, minor_tick_multiple=1, xlim=xlim, ylim=ylim)
             ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
             ax.set_xlabel('Binding Energy (eV)', fontsize=cls.fontsize, labelpad=cls.labelpad)
             ax.invert_xaxis()
@@ -266,7 +266,7 @@ class Casa:
             if plot_residuals:
                 ax.plot(di[x_energy], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
-        Pes.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
+        Aux.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
         ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
         ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
         if x_energy == 'B.E.':
