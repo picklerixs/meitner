@@ -11,5 +11,6 @@ dependencies:
   - numpy
   - pandas
   - scipy
+  - scikit-image
   - seaborn
   - xarray
