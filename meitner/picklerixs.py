@@ -279,6 +279,7 @@ class Rixs:
         self.ei_list = []
         self.i_max_list = []
         self.ccd_max_list = []
+        self.y_list = []
         color_ei = color
         for ei in excitation_energy:
             if isinstance(color, list) or isinstance(color, tuple):
@@ -303,6 +304,7 @@ class Rixs:
                 y = y/k
             else:
                 y = self.rixs_cut['norm_rixs_intensity']
+            self.y_list.append(y)
             if isinstance(scale_factor, int) or isinstance(scale_factor, float):
                 y = y*scale_factor
             elif isinstance(scale_factor, list) or isinstance(scale_factor, tuple):
@@ -353,7 +355,7 @@ class Rixs:
             
         self.xy_list = np.column_stack([self.ccd_max_list, self.ei_list])
 
-        return self.fig, self.axs, self.xy_list
+        return self.fig, self.axs, self.xy_list, self.y_list
     
     
     def plot_xas(
