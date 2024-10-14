@@ -139,6 +139,7 @@ class Casa:
         residual_color='gray',
         residual_offset=-0.15, 
         savefig=False, 
+        scale=1,
         shift=0, 
         subtract_bg=False, 
         top_text=None,
@@ -182,14 +183,21 @@ class Casa:
         for i in range(len(data)):
             di = data[i]
             
+            # if Aux.is_list_or_tuple(scale):
+            #     scale_i = scale[i]
+            # else:
+            #     scale_i = scale
+            try:
+                scale_i = scale[i]
+            except:
+                scale_i = scale
+            print(scale_i)
+            
+            
             if data_color == 'match':
                 data_color_i = color[i]
             else:
                 data_color_i = data_color
-            if envelope_color == 'match':
-                envelope_color_i = color[i]
-            else:
-                envelope_color_i = envelope_color
             if residual_color == 'match':
                 residual_color_i = color[i]
             else:
@@ -200,8 +208,12 @@ class Casa:
                 
             if plot_envelope:
                 # plot envelope
+                if envelope_color == 'match':
+                    envelope_color_i = color[i]
+                else:
+                    envelope_color_i = envelope_color
                 ax.plot(di[x_energy], 
-                    di['Envelope CPS{}_norm'.format(bg_suffix)]+shift*i, 
+                    di['Envelope CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, 
                     linewidth=cls.linewidth, 
                     color=envelope_color_i, 
                     zorder=1000
@@ -211,7 +223,7 @@ class Casa:
                 # plot data as points
                 ax.plot(
                     di[x_energy], 
-                    di['CPS{}_norm'.format(bg_suffix)]+shift*i, 
+                    di['CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, 
                     alpha=marker_alpha,
                     marker=marker, 
                     linewidth=cls.linewidth, 
@@ -221,7 +233,7 @@ class Casa:
                     mew=cls.marker_edge_width
                 )
             elif data_style == 'line':
-                ax.plot(di[x_energy], di['CPS{}_norm'.format(bg_suffix)]+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+                ax.plot(di[x_energy], di['CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
                 
             if plot_comps:
                 # get component IDs and number of components
@@ -249,7 +261,7 @@ class Casa:
                         comp_color_i_j = comp_color_i[j]
                     if comp_line:
                         ax.plot(di[x_energy], 
-                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i, 
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+shift*i, 
                             linewidth=cls.linewidth*0.75, 
                             color=comp_color_i_j, 
                             zorder=100+i+1+j,
@@ -257,14 +269,14 @@ class Casa:
                         )
                     if comp_fill:
                         ax.fill_between(di[x_energy], 
-                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]+shift*i,
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+shift*i,
                             shift*i,
                             color=comp_color_i_j,
                             alpha=comp_fill_alpha
                         )
             
             if plot_residuals:
-                ax.plot(di[x_energy], di['residual_norm']+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
+                ax.plot(di[x_energy], di['residual_norm']*scale_i+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
         Aux.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
         ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
