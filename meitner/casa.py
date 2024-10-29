@@ -292,8 +292,8 @@ class Casa:
         
         if isinstance(top_text, str):
             ax.text(
-                0.0125, 
-                1-0.02, 
+                0.025, 
+                1-0.04, 
                 top_text, 
                 horizontalalignment='left', 
                 verticalalignment='top',
