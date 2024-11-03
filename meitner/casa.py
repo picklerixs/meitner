@@ -182,6 +182,10 @@ class Casa:
 
         for i in range(len(data)):
             di = data[i]
+            if isinstance(shift, float) or isinstance(shift, int):
+                si = shift*i
+            else:
+                si = shift[i]
             
             # if Aux.is_list_or_tuple(scale):
             #     scale_i = scale[i]
@@ -191,7 +195,6 @@ class Casa:
                 scale_i = scale[i]
             except:
                 scale_i = scale
-            print(scale_i)
             
             
             if data_color == 'match':
@@ -204,7 +207,7 @@ class Casa:
                 residual_color_i = residual_color
                 
             if hline:
-                ax.hlines(shift*i, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
+                ax.hlines(si, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
                 
             if plot_envelope:
                 # plot envelope
@@ -213,7 +216,7 @@ class Casa:
                 else:
                     envelope_color_i = envelope_color
                 ax.plot(di[x_energy], 
-                    di['Envelope CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, 
+                    di['Envelope CPS{}_norm'.format(bg_suffix)]*scale_i+si, 
                     linewidth=cls.linewidth, 
                     color=envelope_color_i, 
                     zorder=1000
@@ -223,7 +226,7 @@ class Casa:
                 # plot data as points
                 ax.plot(
                     di[x_energy], 
-                    di['CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, 
+                    di['CPS{}_norm'.format(bg_suffix)]*scale_i+si, 
                     alpha=marker_alpha,
                     marker=marker, 
                     linewidth=cls.linewidth, 
@@ -233,7 +236,7 @@ class Casa:
                     mew=cls.marker_edge_width
                 )
             elif data_style == 'line':
-                ax.plot(di[x_energy], di['CPS{}_norm'.format(bg_suffix)]*scale_i+shift*i, linewidth=cls.linewidth, color=color[i], zorder=999)
+                ax.plot(di[x_energy], di['CPS{}_norm'.format(bg_suffix)]*scale_i+si, linewidth=cls.linewidth, color=color[i], zorder=999)
                 
             if plot_comps:
                 # get component IDs and number of components
@@ -261,7 +264,7 @@ class Casa:
                         comp_color_i_j = comp_color_i[j]
                     if comp_line:
                         ax.plot(di[x_energy], 
-                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+shift*i, 
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+si, 
                             linewidth=cls.linewidth*0.75, 
                             color=comp_color_i_j, 
                             zorder=100+i+1+j,
@@ -269,14 +272,14 @@ class Casa:
                         )
                     if comp_fill:
                         ax.fill_between(di[x_energy], 
-                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+shift*i,
-                            shift*i,
+                            di['{} CPS{}_norm'.format(comp_id_i[j], bg_suffix)]*scale_i+si,
+                            si,
                             color=comp_color_i_j,
                             alpha=comp_fill_alpha
                         )
             
             if plot_residuals:
-                ax.plot(di[x_energy], di['residual_norm']*scale_i+shift*i+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
+                ax.plot(di[x_energy], di['residual_norm']*scale_i+si+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
         Aux.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
         ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
