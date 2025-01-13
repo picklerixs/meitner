@@ -10,33 +10,46 @@ from scipy.interpolate import UnivariateSpline
 class Exafs:
     def __init__(
         self,
-        file
+        file=None,
+        df=None,
+        **kwargs
     ):
-        self.file = pathlib.Path(file)
-        self.df = self.read_csv(self.file)
+        '''
+        KWARGS:
+            df (pd.DataFrame): DataFrame to parse (df.columns = ['Energy (eV)', 'Intensity', 'Ref Intensity'], 'Ref Intensity' is optional)
+            file (str): path to file (df is always preferred if both df and file are specified)
+        df should have columns ['Energy (eV)', 'Intensity', 'Ref Intensity']
+        '''
+        if df:
+            self.df = df
+        elif file:
+            self.file = pathlib.Path(file)
+            self.df = self.read_csv(self.file, **kwargs)
         
     def read_csv(
         self,
         file,
+        format='SPring-8',
         *args,
         **kwargs
     ):
         df = pd.read_csv(
             file,
             sep=r"\s+",
-            skiprows=13
+            skiprows=13,
         )
-        df.columns = ['Angle (c)', 'Angle (o)', 'Time (s)', 'I0', 'I1']
-        # attempt to auto-detect d-spacing of monochromator grating
-        title = pd.read_csv(file, skiprows=4, nrows=0)
-        title = title.columns.values[0]
-        idx0 = title.find('D=')
-        idx1 = title.find('A')
-        d = float(title[idx0+2:idx1])
-        # calculate energy from grating angle
-        df['Energy (eV)'] = self.energy(df['Angle (o)'], d/10)
-        # calculate absorption
-        df['Intensity'] = self.intensity(df['I0'], df['I1'])
+        if format == 'SPring-8':
+            df.columns = ['Angle (c)', 'Angle (o)', 'Time (s)', 'I0', 'I1']
+            # attempt to auto-detect d-spacing of monochromator grating
+            title = pd.read_csv(file, skiprows=4, nrows=0)
+            title = title.columns.values[0]
+            idx0 = title.find('D=')
+            idx1 = title.find('A')
+            d = float(title[idx0+2:idx1])
+            # calculate energy from grating angle
+            df['Energy (eV)'] = self.energy(df['Angle (o)'], d/10)
+            # calculate absorption
+            df['Intensity'] = self.intensity(df['I0'], df['I1'])
         self.df = df
         return self.df
     
