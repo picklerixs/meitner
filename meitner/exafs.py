@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
 
+import warnings
+
 
 class Exafs:
     def __init__(
@@ -16,9 +18,11 @@ class Exafs:
     ):
         '''
         KWARGS:
+            file (str or pathlib.Path): path to file
             df (pd.DataFrame): DataFrame to parse (df.columns = ['Energy (eV)', 'Intensity', 'Ref Intensity'], 'Ref Intensity' is optional)
             file (str): path to file (df is always preferred if both df and file are specified)
         df should have columns ['Energy (eV)', 'Intensity', 'Ref Intensity']
+        if both df and file are specified, df takes precedence
         '''
         if df:
             self.df = df
@@ -62,6 +66,7 @@ class Exafs:
         xanes_region=[-30, 50],
         pre_edge_step=10, # eV
         exafs_step=0.05, # 1/Å
+        mode='decimate',
         s=0
     ):
         self.df_orig = np.copy(self.df)
@@ -73,11 +78,14 @@ class Exafs:
             Emax = self.df['Energy (eV)'].max() - E0
         elif Emax > (self.df['Energy (eV)'].max() - E0):
             Emax = self.df['Energy (eV)'].max() - E0
-        print(Emax)
+        print('Emax = ', Emax)
+        print('kmax = ', self.E_to_k(Emax, 0))
+        # if kmax is None:
+        #     kmax = self.E_to_k(Emax, 0)
+        #     print('kmax = {}'.format(kmax))
+        # generate EXAFS grid in k-space
         if kmax is None:
             kmax = self.E_to_k(Emax, 0)
-            print('kmax = {}'.format(kmax))
-        # generate EXAFS grid in k-space
         exafs_grid = np.arange(0, kmax, exafs_step)
         # convert EXAFS grid to E-space
         exafs_grid = self.k_to_E(exafs_grid, E0)
@@ -87,25 +95,41 @@ class Exafs:
         # truncate below pre_edge[0]
         self.df[self.df['Energy (eV)'] >= pre_edge[0]]
         # truncate above exafs[1]
-        self.df[self.df['Energy (eV)'] <= Emax]
+        self.df[self.df['Energy (eV)'] <= Emax + E0]
         
-        # interpolate downsample below pre_edge[1]
-        self.df = pd.concat([
-            self.interpolate_and_downsample(self.df[(self.df['Energy (eV)'] >= pre_edge[0]) & (self.df['Energy (eV)'] <= pre_edge[1])], 'Energy (eV)', pre_edge, pre_edge_step, s=s),
-            self.df[self.df['Energy (eV)'] >= pre_edge[1]]
-        ])
-        # interpolate downsample above exafs[0]
-        self.df = pd.concat([
-            self.df[self.df['Energy (eV)'] <= xanes_region[1] + E0],
-            self.interpolate_and_downsample(
-                self.df[(self.df['Energy (eV)'] >= xanes_region[1] + E0) & (self.df['Energy (eV)'] <= Emax + E0)], 
-                'Energy (eV)', 
-                [0,0], 
-                0, 
-                grid_points=exafs_grid,
-                s=s
-            )
-        ])
+        if mode == 'spline':
+            # interpolate downsample below pre_edge[1]
+            self.df = pd.concat([
+                self.interpolate_and_downsample(self.df[(self.df['Energy (eV)'] >= pre_edge[0]) & (self.df['Energy (eV)'] <= pre_edge[1])], 'Energy (eV)', pre_edge, pre_edge_step, s=s),
+                self.df[self.df['Energy (eV)'] >= pre_edge[1]]
+            ])
+            # interpolate downsample above exafs[0]
+            self.df = pd.concat([
+                self.df[self.df['Energy (eV)'] <= xanes_region[1] + E0],
+                self.interpolate_and_downsample(
+                    self.df[(self.df['Energy (eV)'] >= xanes_region[1] + E0) & (self.df['Energy (eV)'] <= Emax + E0)], 
+                    'Energy (eV)', 
+                    [0,0], 
+                    0, 
+                    grid_points=exafs_grid,
+                    s=s
+                )
+            ])
+        elif mode == 'decimate':
+            self.df = pd.concat([
+                self.simple_decimate(self.df[(self.df['Energy (eV)'] >= pre_edge[0]) & (self.df['Energy (eV)'] <= pre_edge[1])], 'Energy (eV)', pre_edge, pre_edge_step),
+                self.df[self.df['Energy (eV)'] >= pre_edge[1]]
+            ])
+            self.df = pd.concat([
+                self.df[self.df['Energy (eV)'] <= xanes_region[1] + E0],
+                self.simple_decimate(
+                    self.df[(self.df['Energy (eV)'] >= xanes_region[1] + E0) & (self.df['Energy (eV)'] <= Emax + E0)], 
+                    'Energy (eV)', 
+                    [0,0], 
+                    0, 
+                    grid_points=exafs_grid
+                )
+            ])
         
     def to_csv(
         self,
@@ -141,6 +165,28 @@ class Exafs:
         E0
     ):
         return (k/0.512)**2 + E0
+    
+    @staticmethod
+    def simple_decimate(
+        df,
+        column,
+        bounds, 
+        step,
+        grid_points=None
+    ):
+        if grid_points is None:
+            grid_points = np.arange(bounds[0], bounds[1], step)
+        df = df.sort_values(by=column)
+        e = df[column].to_numpy()
+        n = len(e)
+        m = len(grid_points)
+        diff_matrix = np.empty((n, m))
+        for i in range(n):
+            diff_matrix[i] = np.abs(grid_points - e[i])
+        idx = np.argmin(diff_matrix, axis=0)
+        return df.iloc[idx]
+        
+
     
     @staticmethod
     def interpolate_and_downsample(
@@ -192,19 +238,31 @@ class Batch:
         out_extension='',
         plot=False,
         save=True,
+        abort_at_error=False,
         **kwargs
     ):
         if plot:
             fig, ax = plt.subplots(layout='constrained')
         for i in range(len(file_list)):
-            xafs = Exafs("{}{}".format(file_list[i], file_extension))
-            xafs.rebin(
-                E0,
-                **kwargs
-            )
-            if save:
-                xafs.to_csv("{}{}".format(out_names[i], out_extension))
+            try:
+                xafs = Exafs("{}{}".format(file_list[i], file_extension))
+            except:
+                warnings.warn("Error reading file: {}".format(file_list[i]))
+                pass
+            try:
+                xafs.rebin(
+                    E0,
+                    **kwargs
+                )
+                if save:
+                    xafs.to_csv("{}{}".format(out_names[i], out_extension))
+                if plot:
+                    ax.plot(xafs.df['Energy (eV)'], xafs.df['Intensity'], 'ko')
+            except:
+                warnings.warn("Error rebinning file: {}".format(file_list[i]))
+                pass
             if plot:
-                ax.plot(xafs.df['Energy (eV)'], xafs.df['Intensity'], 'ko')
-        if plot:
-            plt.show()
+                try:
+                    plt.show()
+                except:
+                    pass
