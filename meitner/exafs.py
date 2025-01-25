@@ -73,6 +73,8 @@ class Exafs:
         # pre_edge = np.array(pre_edge) + E0
         # exafs = self.k_to_e(np.array(exafs)) + E0
         
+        if pre_edge_cutoff + E0 < min(self.df['Energy (eV)']):
+            pre_edge_cutoff = min(self.df['Energy (eV)']) - E0
         pre_edge = np.array([pre_edge_cutoff, xanes_region[0]]) + E0
         if Emax is None:
             Emax = self.df['Energy (eV)'].max() - E0
@@ -117,7 +119,12 @@ class Exafs:
             ])
         elif mode == 'decimate':
             self.df = pd.concat([
-                self.simple_decimate(self.df[(self.df['Energy (eV)'] >= pre_edge[0]) & (self.df['Energy (eV)'] <= pre_edge[1])], 'Energy (eV)', pre_edge, pre_edge_step),
+                self.simple_decimate(
+                    self.df[self.df['Energy (eV)'] <= pre_edge[1]],
+                    'Energy (eV)', 
+                    pre_edge, 
+                    pre_edge_step
+                ),
                 self.df[self.df['Energy (eV)'] >= pre_edge[1]]
             ])
             self.df = pd.concat([
