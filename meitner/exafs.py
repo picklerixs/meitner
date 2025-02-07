@@ -57,6 +57,29 @@ class Exafs:
         self.df = df
         return self.df
     
+    def gete0(
+        self,
+        bounds,
+        column='Energy (eV)',
+        step=0.025,
+        window_length=6,
+        polyorder=3,
+        grid_points=None,
+        **kwargs
+    ):
+        df_reevaluated = self.interpolate_and_downsample(
+            self.df, 
+            column, 
+            bounds, 
+            step,
+            grid_points=grid_points,
+            **kwargs
+        )
+        dy = savgol_filter(df_reevaluated['Intensity'], window_length, polyorder, deriv=1, delta=step)
+        idx = np.argmax(dy)
+        self.e0 = df_reevaluated['Energy (eV)'].iloc[idx]
+        return self.e0
+    
     def rebin(
         self,
         E0,
@@ -243,6 +266,7 @@ class Batch:
         E0,
         file_extension='',
         out_extension='',
+        rebin=True,
         plot=False,
         save=True,
         abort_at_error=False,
@@ -256,20 +280,17 @@ class Batch:
             except:
                 warnings.warn("Error reading file: {}".format(file_list[i]))
                 pass
-            try:
-                xafs.rebin(
-                    E0,
-                    **kwargs
-                )
-                if save:
-                    xafs.to_csv("{}{}".format(out_names[i], out_extension))
-                if plot:
-                    ax.plot(xafs.df['Energy (eV)'], xafs.df['Intensity'], 'ko')
-            except:
-                warnings.warn("Error rebinning file: {}".format(file_list[i]))
-                pass
-            if plot:
+            if rebin:
                 try:
-                    plt.show()
+                    xafs.rebin(
+                        E0,
+                        **kwargs
+                    )
                 except:
+                    warnings.warn("Error rebinning file: {}".format(file_list[i]))
                     pass
+            if save:
+                xafs.to_csv("{}{}".format(out_names[i], out_extension))
+            if plot:
+                ax.plot(xafs.df['Energy (eV)'], xafs.df['Intensity'], 'ko')
+                plt.show()
