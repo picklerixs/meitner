@@ -470,12 +470,22 @@ class Rixs:
             
         Additional kwargs are passed to plt.colormesh().
         '''
-        self.fig, self.axs = plt.subplots(
-            1,
-            2,
-            layout='constrained',
-            gridspec_kw={'width_ratios': width_ratios}
-        )
+        if plot_tfy or plot_tey or plot_ipfy:
+            self.fig, self.axs = plt.subplots(
+                1,
+                2,
+                layout='constrained',
+                gridspec_kw={'width_ratios': width_ratios}
+            )
+            self.axs[1].set_xlim([-0.1, 1.2])
+            self.axs[1].set_xticks([])
+            if not xas_tick_labels:
+                self.axs[1].set_yticklabels([])
+        else:
+            self.fig, self.axs = plt.subplots(
+                layout='constrained'
+            )
+            self.axs = [self.axs]
         
         if xmode == 'emission_energy':
             try:
@@ -503,17 +513,25 @@ class Rixs:
             **kwargs
         )
 
-        if plot_elastic_line and (xmode == 'ccd_pixel'):
-            self.axs[0].plot(
-                self.ccd_pixel_arr,
-                self.excitation_energy_filtered,
-                'gx', color='orange'
-            )
-            self.axs[0].plot(
-                self.ds['ccd_pixel'],
-                self.ds['emission_energy'],
-                'r-'
-            )
+        if plot_elastic_line:
+            if xmode == 'ccd_pixel':
+                self.axs[0].plot(
+                    self.ccd_pixel_arr,
+                    self.excitation_energy_filtered,
+                    'gx', color='orange'
+                )
+                self.axs[0].plot(
+                    self.ds['ccd_pixel'],
+                    self.ds['emission_energy'],
+                    'r-'
+                )
+            elif xmode == 'emission_energy':
+                self.axs[0].plot(
+                    self.ds['emission_energy'],
+                    self.ds['emission_energy'],
+                    color='gray',
+                    linestyle='--'
+                )
         # XAS is automatically min-max normalized
         if plot_tfy:
             self.axs[1].plot(
@@ -536,10 +554,7 @@ class Rixs:
                 color=xas_color,
                 linewidth=xas_linewidth
             )
-        self.axs[1].set_xlim([-0.1, 1.2])
-        self.axs[1].set_xticks([])
-        if not xas_tick_labels:
-            self.axs[1].set_yticklabels([])
+
         
             
         for ax in self.axs:
@@ -586,7 +601,10 @@ class Rixs:
                 self.axs[0].set_xlim(xlim)
             if ylim:
                 self.axs[0].set_ylim(ylim)
-                self.axs[1].set_ylim(ylim)
+                try:
+                    self.axs[1].set_ylim(ylim)
+                except:
+                    warnings.warn('XAS axes not found.')
             
             if xmajtm:
                 self.axs[0].xaxis.set_major_locator(MultipleLocator(xmajtm))
@@ -594,10 +612,16 @@ class Rixs:
                 self.axs[0].xaxis.set_minor_locator(MultipleLocator(xmintm))
             if ymajtm:
                 self.axs[0].yaxis.set_major_locator(MultipleLocator(ymajtm))
-                self.axs[1].yaxis.set_major_locator(MultipleLocator(ymajtm))
+                try:
+                    self.axs[1].yaxis.set_major_locator(MultipleLocator(ymajtm))
+                except:
+                    warnings.warn('XAS axes not found.')
             if ymintm:
                 self.axs[0].yaxis.set_minor_locator(MultipleLocator(ymintm))
-                self.axs[1].yaxis.set_minor_locator(MultipleLocator(ymintm))
+                try:
+                    self.axs[1].yaxis.set_minor_locator(MultipleLocator(ymintm))
+                except:
+                    warnings.warn('XAS axes not found.')
 
             self.axs[0].set_xlabel(xlabel)
             self.axs[0].set_ylabel(ylabel)
