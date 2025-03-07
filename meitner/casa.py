@@ -207,7 +207,7 @@ class Casa:
                 residual_color_i = residual_color
                 
             if hline:
-                ax.hlines(si, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=500+i+1)
+                ax.hlines(si, 0, 999, color='gray', linewidth=cls.linewidth*0.75, zorder=-999)
                 
             if plot_envelope:
                 # plot envelope
