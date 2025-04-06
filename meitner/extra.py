@@ -230,8 +230,14 @@ class Interp:
                 width=tick_linewidth,
                 length=tick_length,
                 labelsize=fontsize,
+                axis='both',
                 which='both'
                 )
+            ax.tick_params(
+                length=tick_length*0.5,
+                axis='both',
+                which='minor'
+            )
             
             # label settings
             if label_preset == 'ks_exafs':

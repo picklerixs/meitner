@@ -3,10 +3,13 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 
+import matplotlib.patches as patches
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
 
 import warnings
+
+from .extra import Plot
 
 
 class Exafs:
@@ -294,3 +297,161 @@ class Batch:
             if plot:
                 ax.plot(xafs.df['Energy (eV)'], xafs.df['Intensity'], 'ko')
                 plt.show()
+                
+                
+class Rsxap:
+    def __init__(
+        self
+    ):
+        pass
+
+    fontsize=12
+    linewidth=1.25
+    axes_linewidth=1.35
+    tick_linewidth=axes_linewidth*.9
+    tick_length=tick_linewidth*5
+
+    @staticmethod
+    def read_dat(
+        path
+    ):
+        df_list = []
+        if not (isinstance(path, list) or isinstance(path, tuple)):
+            path = [path]
+        for p in path:
+            p = pathlib.Path(p)
+            with p.open() as f:
+                line_list = []
+                i = 0
+                for line in f:
+                    if line.startswith('#'):
+                        i += 1
+                        line_list.append(line)
+                df = pd.read_csv(p, skiprows=i, sep=r'\s+', engine='python', header=None)
+            df_list.append(df)
+        return df_list
+
+
+    @staticmethod
+    def plot_R(
+        df,
+        dim=(3.25,3.25),
+        plot_fit=False,
+        savefig=None,
+        fontsize=fontsize,
+        linewidth=linewidth,
+        color='#4298B5',
+        fig=None,
+        ax=None,
+        errorbar=None,
+        xlim=(0,6),
+        ylim=None,
+        ylabel=None,
+        window=None,
+        **kwargs
+        ):
+        if not (fig and ax):
+            fig, ax = plt.subplots(layout='constrained')
+        
+        if plot_fit:
+            ax.plot(df[0], df[5], color=color, zorder=999, linewidth=linewidth, linestyle='--')
+            ax.plot(df[0], df[6], color=color, zorder=998, linewidth=linewidth, linestyle='--')
+            if errorbar:
+                ax.errorbar(df[0], df[1], yerr=df[2], fmt='-', color='black')
+                ax.errorbar(df[0], df[3], yerr=df[4], fmt='-', color='black')
+            else:
+                ax.plot(df[0], df[1], color='black')
+                ax.plot(df[0], df[3], color='black')
+        else:
+            if errorbar:
+                ax.errorbar(df[0], df[1], yerr=df[2], fmt='-', color=color)
+                ax.errorbar(df[0], df[3], yerr=df[4], fmt='-', color=color)
+            else:
+                ax.plot(df[0], df[1], color=color, linestyle='-')
+                ax.plot(df[0], df[3], color=color, linestyle='-')
+                
+        if window is not None:
+            xy_list = ((window[0]-10,-500), (window[1],-500))
+            width_list = (10, 10)
+            for i in range(len(xy_list)):
+                ax.add_patch(
+                    patches.Rectangle(
+                        xy_list[i],
+                        width_list[i],
+                        9999,
+                        color='gray',
+                        alpha=0.25,
+                        zorder=0
+                    )
+                )
+                
+        Plot.ax_opts(
+            ax,
+            xlim=xlim,
+            ylim=ylim,
+            fontsize=fontsize,
+            label_preset='rs_exafs',
+            **kwargs
+        )
+        
+        # ax.legend(
+        #     # handles=[r"$|\chi(R)|$", r"Re[$\chi(R)$]"], 
+        #     # loc=legend_loc,
+        #     frameon=False, 
+        #     fontsize=fontsize, 
+        #     labelspacing=0.075/2, 
+        #     borderpad=0, 
+        #     handlelength=1, 
+        #     handletextpad=0.2
+        # )
+        
+        fig.set_size_inches(*dim)
+        if savefig:
+            fig.savefig(savefig)
+            
+
+    def plot_k(
+        df,
+        dim=(3.25,3.25),
+        plot_fit=False,
+        plot_filtered=True,
+        plot_window=False,
+        savefig=None,
+        xlim=(2.5,16),
+        ylim=None,
+        fontsize=fontsize,
+        linewidth=linewidth,
+        color='#4298B5',
+        fig=None,
+        ax=None,
+        **kwargs
+        ):
+        if fig is None and (ax is None):
+            fig, ax = plt.subplots(layout='constrained')
+        # df.plot(x=0, y=3, ax=ax)
+        ax.plot(df[5], df[6], color='gray', linewidth=linewidth)
+        
+        if plot_filtered:
+            ax.plot(df[0], df[1], color='black', linewidth=linewidth)
+        if plot_fit:
+            ax.plot(df[0], df[3], color=color, zorder=999, linewidth=linewidth, linestyle='--')
+        if plot_window:
+            ax.plot(df[5], df.iloc[:, -3], color=color, zorder=999, linewidth=linewidth)
+        
+        # ax.errorbar(df[5], df[6], yerr=df[7], fmt='-', color='black')
+        # ax.errorbar(df[0], df[3], yerr=df[4], fmt='+', color='black')
+        # df.plot(x=0, y=1, ax=ax)
+        # ax.plot(df[0], np.sqrt(df[1]**2+df[6]**2))
+
+        Plot.ax_opts(
+            ax,
+            xlim=xlim,
+            ylim=ylim,
+            fontsize=fontsize,
+            label_preset='ks_exafs',
+            **kwargs
+        )
+        
+        fig.set_size_inches(*dim)
+        if savefig:
+            fig.savefig(savefig)
