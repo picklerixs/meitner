@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import rc, rcParams
+import matplotlib.pyplot as plt
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from scipy.interpolate import UnivariateSpline # default is cubic spline
 
@@ -140,6 +141,40 @@ class Interp:
             pass
         
         
+        @staticmethod
+        def set_rc(
+            font_families=['Arial','Noto Sans'],
+            usetex=False
+        ):
+            rc('font',**{'family':'sans-serif','sans-serif':font_families})
+            rc('text', usetex=usetex)
+        
+        
+        @staticmethod
+        def set_labels(
+            ax,
+            xlabel, 
+            ylabel, 
+            fontsize, 
+            **kwargs
+        ):
+            ax.set_xlabel(xlabel, fontsize=fontsize, **kwargs)
+            ax.set_ylabel(ylabel, fontsize=fontsize, **kwargs)
+        
+        
+        @staticmethod
+        def sample_colormap(
+            cmap,
+            ncolors,
+            start=0,
+            reverse=False
+        ):
+            cmap = getattr(plt.cm, cmap)
+            ncolors = min(cmap.N, ncolors)
+            colors = [cmap(int(x*cmap.N/ncolors)) for x in range(start,start+ncolors,1)]
+            return colors[::-1] if reverse else colors
+        
+        
         def ax_opts(
             self,
             ax, 
@@ -162,7 +197,7 @@ class Interp:
             ylabel=None,
             fontsize=12,
             label_preset=None,
-            ):
+        ):
             # quantitative axis settings
             if xlim is not None:
                 ax.set_xlim(xlim)
@@ -238,15 +273,3 @@ class Interp:
                 ax.set_xlabel(xlabel, fontsize=fontsize)
             if ylabel:
                 ax.set_ylabel(ylabel, fontsize=fontsize)
-            
-            
-            @staticmethod
-            def set_labels(
-                ax,
-                xlabel, 
-                ylabel, 
-                fontsize, 
-                **kwargs
-                ):
-                ax.set_xlabel(xlabel, fontsize=fontsize, **kwargs)
-                ax.set_ylabel(ylabel, fontsize=fontsize, **kwargs)
