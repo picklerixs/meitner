@@ -333,3 +333,25 @@ class Casa:
         ylim
     ):
         pass
+    
+    
+    def findmaxcps(
+        df, 
+        xmin, 
+        xmax, 
+        col='CPS_no_bg_norm', 
+        energy='B.E.', 
+        xinterp_step=None,
+        window_length=None,
+        polyorder=3,
+        **kwargs
+    ):
+        df1 = df[(df[energy] >= xmin) & (df[energy] <= xmax)].reset_index()
+        if xinterp_step:
+            xinterp = np.arange(xmin, xmax, xinterp_step)
+            cs = CubicSpline(df1[energy], df1[col])
+            df1 = pd.DataFrame({energy: xinterp, col: cs(xinterp)})
+        elif window_length:
+            df1[col] = savgol_filter(df1[col], window_length, polyorder, **kwargs)
+        idx = df1[col].argmax()
+        return idx, df1[energy][idx]
