@@ -333,7 +333,7 @@ class Rsxap:
 
 
     @staticmethod
-    def plot_R(
+    def plot_r(
         df,
         dim=(3.25,3.25),
         plot_fit=False,
@@ -346,7 +346,6 @@ class Rsxap:
         errorbar=None,
         xlim=(0,6),
         ylim=None,
-        ylabel=None,
         window=None,
         **kwargs
         ):
@@ -421,22 +420,28 @@ class Rsxap:
         ylim=None,
         fontsize=fontsize,
         linewidth=linewidth,
-        color='#4298B5',
+        fit_color='#4298B5',
         fig=None,
         ax=None,
+        xcol=5,
+        ycol=6,
+        kwt=None,
         **kwargs
         ):
         if fig is None and (ax is None):
             fig, ax = plt.subplots(layout='constrained')
         # df.plot(x=0, y=3, ax=ax)
-        ax.plot(df[5], df[6], color='gray', linewidth=linewidth)
+        if kwt:
+            ax.plot(df[xcol], df[ycol]*df[xcol]**kwt, color='gray', linewidth=linewidth)
+        else:
+            ax.plot(df[xcol], df[ycol], color='gray', linewidth=linewidth)
         
         if plot_filtered:
             ax.plot(df[0], df[1], color='black', linewidth=linewidth)
         if plot_fit:
-            ax.plot(df[0], df[3], color=color, zorder=999, linewidth=linewidth, linestyle='--')
+            ax.plot(df[0], df[3], color=fit_color, zorder=999, linewidth=linewidth, linestyle='--')
         if plot_window:
-            ax.plot(df[5], df.iloc[:, -3], color=color, zorder=999, linewidth=linewidth)
+            ax.plot(df[5], df.iloc[:, -3], color=fit_color, zorder=999, linewidth=linewidth)
         
         # ax.errorbar(df[5], df[6], yerr=df[7], fmt='-', color='black')
         # ax.errorbar(df[0], df[3], yerr=df[4], fmt='+', color='black')
