@@ -17,7 +17,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from matplotlib.lines import Line2D
 
 from .extra import Aux
-from .meitner import Pes
+# from .meitner import Pes
 
 
 class Fit:

@@ -9,18 +9,18 @@ from matplotlib import rc, rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from matplotlib.lines import Line2D
 
-from .extra import Aux
+from .extra import Aux, Plot
 
 
 class Casa:
     
-    fontsize=18
+    fontsize=12
     labelsize=fontsize
     legendsize=fontsize
-    linewidth=2.5
+    linewidth=1.25
 
     font_family='Arial'
-    axes_linewidth=2.25
+    axes_linewidth=1.35
     tick_linewidth=axes_linewidth*.9
     tick_length=tick_linewidth*5
     marker_size=7
@@ -150,7 +150,9 @@ class Casa:
         x_energy='B.E.',
         xlabel=None, 
         ylabel='Intensity (a.u.)',
-        fontsize=None
+        yticks=[],
+        fontsize=None,
+        **kwargs
     ):
         # minimizes clipping and ensures figure conforms to dim
         # more flexible than plt.tightlayout()
@@ -240,8 +242,8 @@ class Casa:
                 
             if plot_comps:
                 # get component IDs and number of components
-                comp_id_i = [id for id in di.columns.values if 'p' in id]
-                n_comps_i = int(len(comp_id_i)/5)
+                comp_id_i = [id for id in di.columns.values if id.startswith('p') and id[-1].isdigit()]
+                n_comps_i = len(comp_id_i)
                 if Aux.is_list_or_tuple(comp_id):
                     comp_id_i = [k for k in comp_id if k in comp_id_i]
                     n_comps_i = int(len(comp_id_i))
@@ -255,9 +257,7 @@ class Casa:
                 else:
                     comp_color_i = comp_color
                     
-                
-                # subtract 1 to prevent plotting envelope as last component
-                for j in range(n_comps_i-1):
+                for j in range(n_comps_i):
                     if comp_color_i is None:
                         comp_color_i_j = comp_color_i
                     else:
@@ -279,13 +279,36 @@ class Casa:
                         )
             
             if plot_residuals:
-                ax.plot(di[x_energy], di['residual_norm']*scale_i+si+residual_offset, linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
+                ax.plot(di[x_energy], di['residual_norm']*scale_i+si+residual_offset, 
+                        linewidth=cls.linewidth*0.75, color=residual_color_i, zorder=100)
 
-        Aux.ax_opts(ax, major_tick_multiple=major_tick_multiple, minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
-        ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
-        ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
-        if x_energy == 'B.E.':
-            ax.invert_xaxis()
+        # Aux.ax_opts(ax, major_tick_multiple=major_tick_multiple, 
+        #             minor_tick_multiple=minor_tick_multiple, xlim=xlim, ylim=ylim)
+        # ax.set_ylabel(ylabel, fontsize=cls.fontsize, labelpad=cls.labelpad*2/3)
+        # ax.set_xlabel(xlabel, fontsize=cls.fontsize, labelpad=cls.labelpad)
+        
+        Plot.ax_opts(
+            ax,
+            # quantitative axis settings
+            xlim=xlim,
+            ylim=ylim,
+            yticks=yticks, 
+            xmajtm=major_tick_multiple, 
+            xmintm=minor_tick_multiple,
+            # line styling
+            axes_linewidth=cls.axes_linewidth,
+            tick_linewidth=cls.tick_linewidth,
+            tick_length=cls.tick_length,
+            # label settings
+            xlabel=xlabel,
+            ylabel=ylabel,
+            fontsize=cls.fontsize,
+            label_preset='xps',
+            **kwargs
+        )
+        
+        # if x_energy == 'B.E.':
+        #     ax.invert_xaxis()
 
         ax.tick_params(labelsize=cls.fontsize)
         ax.xaxis.set_tick_params(width=cls.tick_linewidth, length=cls.tick_length, which='major')
