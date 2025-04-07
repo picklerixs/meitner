@@ -3,6 +3,7 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib.lines import Line2D
 import matplotlib.patches as patches
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
@@ -347,6 +348,9 @@ class Rsxap:
         xlim=(0,6),
         ylim=None,
         window=None,
+        legend=False,
+        legend_loc='lower right',
+        legend_fontsize=None,
         **kwargs
         ):
         if not (fig and ax):
@@ -404,7 +408,28 @@ class Rsxap:
         #     handletextpad=0.2
         # )
         
-        fig.set_size_inches(*dim)
+        if legend:
+            exp = Line2D([0], [0], label='Data', color='k', linewidth=linewidth)
+            handles = [exp]
+            if plot_fit:
+                fit = Line2D([0], [0], label='Fit', color=color, linestyle='--', markersize=linewidth)
+                handles.append(fit)
+
+            if legend_fontsize is None:
+                legend_fontsize = fontsize
+
+            ax.legend(handles=handles, 
+                loc=legend_loc,
+                frameon=False, 
+                fontsize=legend_fontsize, 
+                labelspacing=0.25/2, 
+                borderpad=0, 
+                handlelength=1, 
+                handletextpad=0.2
+)
+        
+        if dim is not None:
+            fig.set_size_inches(*dim)
         if savefig:
             fig.savefig(savefig)
             
@@ -426,6 +451,9 @@ class Rsxap:
         xcol=5,
         ycol=6,
         kwt=None,
+        legend=False,
+        legend_loc='lower right',
+        legend_fontsize=None,
         **kwargs
         ):
         if fig is None and (ax is None):
@@ -457,6 +485,93 @@ class Rsxap:
             **kwargs
         )
         
-        fig.set_size_inches(*dim)
+        if legend:
+            exp = Line2D([0], [0], label='Data', color='gray', linewidth=linewidth)
+            expf = Line2D([0], [0], label='Filtered Data', color='k', linewidth=linewidth)
+            handles = [exp,expf]
+            if plot_fit:
+                fit = Line2D([0], [0], label='Fit', color=fit_color, linestyle='--', markersize=linewidth)
+                handles.append(fit)
+
+            if legend_fontsize is None:
+                legend_fontsize = fontsize
+
+            ax.legend(handles=handles, 
+                loc=legend_loc,
+                frameon=False, 
+                fontsize=legend_fontsize, 
+                labelspacing=0.25/2, 
+                borderpad=0, 
+                handlelength=1, 
+                handletextpad=0.2
+)
+        
+        if dim is not None:
+            fig.set_size_inches(*dim)
+        if savefig:
+            fig.savefig(savefig)
+            
+            
+    @classmethod
+    def plot_xanes(
+        cls,
+        df_list,
+        dim=(3.25,3.25),
+        savefig=None,
+        xlim=None,
+        ylim=None,
+        fontsize=fontsize,
+        linewidth=linewidth,
+        color=None,
+        fig=None,
+        ax=None,
+        xcol=0,
+        ycol=1,
+        offset=0,
+        text=None,
+        legend_fontsize=None,
+        **kwargs
+    ):
+        if fig is None and (ax is None):
+            fig, ax = plt.subplots(layout='constrained')
+        if color is None:
+            color = Plot.sample_colormap(
+                'plasma',
+                len(df_list)
+            )
+            
+        if isinstance(xcol, int):
+            xcol = [xcol for _ in range(len(df_list))]
+        if isinstance(ycol, int):
+            ycol = [ycol for _ in range(len(df_list))]
+            
+        i = 0
+        for df in df_list:
+            ax.plot(df[xcol[i]], df[ycol[i]]+offset*i, color=color[i], linewidth=linewidth)
+            i += 1
+            
+        # text_list = ['Ag foil', 'PAF-1-3S-Ag', r'Ag$_2$S']
+        # color_list = [spectrum_color[0], spectrum_color[1], spectrum_color[3]]
+        # for i in range(len(text_list)):
+        #     ax.text(
+        #         25596, 
+        #         0.295+0.5+dy*i, 
+        #         text_list[i], 
+        #         fontsize=fontsize,
+        #         horizontalalignment='right',
+        #         color=color_list[i]
+        #         )
+
+        Plot.ax_opts(
+            ax,
+            xlim=xlim,
+            ylim=ylim,
+            fontsize=fontsize,
+            label_preset='xanes',
+            **kwargs
+        )
+
+        if dim is not None:
+            fig.set_size_inches(*dim)
         if savefig:
             fig.savefig(savefig)
