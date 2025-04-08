@@ -131,6 +131,7 @@ class Casa:
         envelope_color='match',
         hline=True, 
         legend=True,
+        legend_fontsize=None,
         legend_loc='upper right',
         linewidth=None,
         plot_comps=False, 
@@ -250,8 +251,12 @@ class Casa:
                 
                 if comp_color is None:
                     comp_color_i = None
-                # elif isinstance(comp_color, list):
-                #     comp_color_i = comp_color
+                elif isinstance(comp_color, list) or isinstance(comp_color, tuple):
+                    try: 
+                        comp_color[i][0][0]
+                        comp_color_i = comp_color[i]
+                    except:
+                        comp_color_i = None
                 elif isinstance(comp_color, dict):
                     comp_color_i = comp_color[i]
                 else:
@@ -334,10 +339,13 @@ class Casa:
                     markeredgecolor='gray', markerfacecolor='gray', linestyle='', alpha=marker_alpha)
             handles = [line,point]
 
+            if legend_fontsize is None:
+                legend_fontsize = cls.fontsize
+
             ax.legend(handles=handles, 
                 loc=legend_loc,
                 frameon=False, 
-                fontsize=cls.fontsize, 
+                fontsize=legend_fontsize, 
                 labelspacing=0.075/2, 
                 borderpad=0, 
                 handlelength=1, 
