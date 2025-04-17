@@ -38,13 +38,14 @@ class Exafs:
         self,
         file,
         format='SPring-8',
+        skiprows=13,
         *args,
         **kwargs
     ):
         df = pd.read_csv(
             file,
             sep=r"\s+",
-            skiprows=13,
+            skiprows=skiprows,
         )
         if format == 'SPring-8':
             df.columns = ['Angle (c)', 'Angle (o)', 'Time (s)', 'I0', 'I1']
@@ -58,6 +59,9 @@ class Exafs:
             df['Energy (eV)'] = self.energy(df['Angle (o)'], d/10)
             # calculate absorption
             df['Intensity'] = self.intensity(df['I0'], df['I1'])
+        if format == '2col':
+            df.columns = ['Energy (eV)', 'Intensity']
+            
         self.df = df
         return self.df
     
@@ -86,7 +90,7 @@ class Exafs:
     
     def rebin(
         self,
-        E0,
+        E0=None,
         pre_edge_cutoff=-300,
         Emax=None,
         kmax=None,
@@ -96,6 +100,8 @@ class Exafs:
         mode='decimate',
         s=0
     ):
+        if E0 is None:
+            E0 = self.e0
         self.df_orig = np.copy(self.df)
         # pre_edge = np.array(pre_edge) + E0
         # exafs = self.k_to_e(np.array(exafs)) + E0
