@@ -378,6 +378,7 @@ class Casa:
         **kwargs
     ):
         df1 = df[(df[energy] >= xmin) & (df[energy] <= xmax)].reset_index()
+        df1 = df1.sort_values(by=energy)
         if xinterp_step:
             xinterp = np.arange(xmin, xmax, xinterp_step)
             cs = CubicSpline(df1[energy], df1[col])
