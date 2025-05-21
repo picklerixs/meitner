@@ -5,8 +5,8 @@ import warnings
 
 from math import ceil
 from scipy.integrate import trapezoid
+from scipy.interpolate import CubicSpline, Akima1DInterpolator
 from matplotlib import rc, rcParams
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from matplotlib.lines import Line2D
 
 from .extra import Aux, Plot
@@ -357,15 +357,16 @@ class Casa:
                 fig.savefig(savefig)
         return fig, ax
     
-    def plot_mesh(self,
-        data,
-        colormap,
-        xlim,
-        ylim
-    ):
-        pass
+    # def plot_mesh(self,
+    #     data,
+    #     colormap,
+    #     xlim,
+    #     ylim
+    # ):
+    #     pass
     
     
+    @staticmethod
     def findmaxcps(
         df, 
         xmin, 
@@ -387,3 +388,42 @@ class Casa:
             df1[col] = savgol_filter(df1[col], window_length, polyorder, **kwargs)
         idx = df1[col].argmax()
         return idx, df1[energy][idx]
+    
+    
+    @staticmethod
+    def interpolate(
+        df,
+        x,
+        xcol='B.E.',
+        ycol='CPS_no_bg_norm',
+        method='makima',
+        **kwargs
+    ):
+        idx = df.columns.get_loc(ycol)-1
+        return Akima1DInterpolator(x, df.sort_values(by=xcol).drop(xcol, axis=1), method=method, **kwargs), idx
+
+
+    @staticmethod
+    def interpolate_and_average(
+        df_list,
+        x,
+        xcol='B.E.',
+        ycol='CPS_no_bg_norm',
+        **kwargs
+    ):
+        xy_list = []
+        for df in df_list:
+            xy = np.empty((len(x), 2))
+            cs, idx = interpolate(
+                df,
+                x,
+                xcol=xcol,
+                ycol=ycol,
+                **kwargs
+            )
+            xy[:,0] = x
+            xy[:,1] = cs(x)[:,idx]
+            xy_list.append(xy)
+        xy_avg = np.average(xy_list, axis=0)
+        xy_std = np.std(xy_list, axis=0)
+        return xy_avg, xy_std, xy_list
