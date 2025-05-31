@@ -6,6 +6,7 @@ import warnings
 from math import ceil
 from scipy.integrate import trapezoid
 from scipy.interpolate import CubicSpline, Akima1DInterpolator
+from scipy.signal import savgol_filter
 from matplotlib import rc, rcParams
 from matplotlib.lines import Line2D
 
@@ -403,8 +404,9 @@ class Casa:
         return Akima1DInterpolator(x, df.sort_values(by=xcol).drop(xcol, axis=1), method=method, **kwargs), idx
 
 
-    @staticmethod
+    @classmethod
     def interpolate_and_average(
+        cls,
         df_list,
         x,
         xcol='B.E.',
@@ -414,7 +416,7 @@ class Casa:
         xy_list = []
         for df in df_list:
             xy = np.empty((len(x), 2))
-            cs, idx = interpolate(
+            cs, idx = cls.interpolate(
                 df,
                 x,
                 xcol=xcol,
