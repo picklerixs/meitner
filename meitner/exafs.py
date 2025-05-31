@@ -357,27 +357,28 @@ class Rsxap:
         legend=False,
         legend_loc='lower right',
         legend_fontsize=None,
+        dy=0,
         **kwargs
         ):
         if not (fig and ax):
             fig, ax = plt.subplots(layout='constrained')
         
         if plot_fit:
-            ax.plot(df[0], df[5], color=color, zorder=999, linewidth=linewidth, linestyle='--')
-            ax.plot(df[0], df[6], color=color, zorder=998, linewidth=linewidth, linestyle='--')
+            ax.plot(df[0], df[5]+dy, color=color, zorder=999, linewidth=linewidth, linestyle='--')
+            ax.plot(df[0], df[6]+dy, color=color, zorder=998, linewidth=linewidth, linestyle='--')
             if errorbar:
-                ax.errorbar(df[0], df[1], yerr=df[2], fmt='-', color='black')
-                ax.errorbar(df[0], df[3], yerr=df[4], fmt='-', color='black')
+                ax.errorbar(df[0], df[1]+dy, yerr=df[2], fmt='-', color='black')
+                ax.errorbar(df[0], df[3]+dy, yerr=df[4], fmt='-', color='black')
             else:
-                ax.plot(df[0], df[1], color='black')
-                ax.plot(df[0], df[3], color='black')
+                ax.plot(df[0], df[1]+dy, color='black')
+                ax.plot(df[0], df[3]+dy, color='black')
         else:
             if errorbar:
-                ax.errorbar(df[0], df[1], yerr=df[2], fmt='-', color=color)
-                ax.errorbar(df[0], df[3], yerr=df[4], fmt='-', color=color)
+                ax.errorbar(df[0], df[1]+dy, yerr=df[2], fmt='-', color=color)
+                ax.errorbar(df[0], df[3]+dy, yerr=df[4], fmt='-', color=color)
             else:
-                ax.plot(df[0], df[1], color=color, linestyle='-')
-                ax.plot(df[0], df[3], color=color, linestyle='-')
+                ax.plot(df[0], df[1]+dy, color=color, linestyle='-')
+                ax.plot(df[0], df[3]+dy, color=color, linestyle='-')
                 
         if window is not None:
             xy_list = ((window[0]-10,-500), (window[1],-500))
