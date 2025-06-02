@@ -1092,6 +1092,8 @@ class Csv:
     def import_single_csv(
         cls,
         path=None,
+        be='be',
+        ke='ke',
         cols=('ke', 'counts', 'be', 'cps'),
         dropna=True,
         header=None,
@@ -1108,8 +1110,8 @@ class Csv:
             ds.dropna(axis='columns', inplace=True)
         ds.columns = cols
         ds = xr.Dataset.from_dataframe(ds)
-        ds = ds.set_coords('be')
-        ds = ds.set_coords('ke')
+        ds = ds.set_coords(be)
+        ds = ds.set_coords(ke)
         return ds
     
     
