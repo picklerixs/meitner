@@ -1084,6 +1084,35 @@ class Bg:
         return background
 
 
+class Csv:
+    '''
+    Methods to import and parse CSV data.
+    '''
+    @classmethod
+    def import_single_csv(
+        cls,
+        path=None,
+        cols=('ke', 'counts', 'be', 'cps'),
+        dropna=True,
+        header=None,
+        skiprows=8,
+        **kwargs
+    ):
+        ds = pd.read_csv(
+            path,
+            header=header,
+            skiprows=skiprows,
+            **kwargs
+        )
+        if dropna:
+            ds.dropna(axis='columns', inplace=True)
+        ds.columns = cols
+        ds = xr.Dataset.from_dataframe(ds)
+        ds = ds.set_coords('be')
+        ds = ds.set_coords('ke')
+        return ds
+    
+    
 class Vms:
     '''
     Methods to import and parse VAMAS data.
