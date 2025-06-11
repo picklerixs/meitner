@@ -1110,8 +1110,10 @@ class Csv:
             ds.dropna(axis='columns', inplace=True)
         ds.columns = cols
         ds = xr.Dataset.from_dataframe(ds)
-        ds = ds.set_coords(be)
-        ds = ds.set_coords(ke)
+        if be:
+            ds = ds.set_coords(be)
+        if ke:
+            ds = ds.set_coords(ke)
         return ds
     
     
