@@ -120,6 +120,7 @@ class Casa:
         xlim, 
         ylim, 
         # KWARGS
+        ax=None,
         comp_id=None,
         comp_color=None, 
         comp_line=True,
@@ -130,6 +131,7 @@ class Casa:
         data_style='markers',
         dim=[4,3], 
         envelope_color='match',
+        fig=None,
         hline=True, 
         legend=True,
         legend_fontsize=None,
@@ -158,7 +160,8 @@ class Casa:
     ):
         # minimizes clipping and ensures figure conforms to dim
         # more flexible than plt.tightlayout()
-        fig, ax = plt.subplots(layout='constrained')
+        if ax is None or (fig is None):
+            fig, ax = plt.subplots(layout='constrained')
         
         if isinstance(linewidth, int) or isinstance(linewidth, float):
             cls.linewidth = linewidth
