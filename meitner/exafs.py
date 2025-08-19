@@ -8,6 +8,13 @@ import matplotlib.patches as patches
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
 
+import larch.io as lio
+import larch.xafs as lx
+
+from larch import Group
+from larch.fitting import param, guess, param_group
+from larch.math import interp1d, remove_dups
+
 import warnings
 
 from .extra import Plot
@@ -582,3 +589,474 @@ class Rsxap:
             fig.set_size_inches(*dim)
         if savefig:
             fig.savefig(savefig)
+            
+            
+class Sp8:
+    
+    def __init__(
+        self,
+        dir,
+        *args,
+        data_list=None,
+        E_shift=0,
+        import_data_kwargs=None,
+        **kwargs
+    ):
+        if import_data_kwargs is None:
+            import_data_kwargs = {}
+        if 'E_shift' not in import_data_kwargs.keys():
+            import_data_kwargs['E_shift'] = E_shift
+        if data_list is not None:
+            self.data_list = data_list
+        else:
+            self.path_generator(dir, *args, **kwargs)
+        self.make_arr_list(**import_data_kwargs)
+        # self.arr_list = []
+        # for f in self.data_list:
+        #     self.arr_list.append(self.import_data(f, **import_data_kwargs))
+    
+    def path_generator(
+        self,
+        dir,
+        suffix,
+        runs,
+        scans=None,
+        ext='.dat',
+        run_format='04',
+        scan_format='03',
+        exclude_scans=None,
+        run_scan_sep='_'
+    ):
+        '''
+        Returns a list of data file paths (pathlib.Path() instances).
+        '''
+        if exclude_scans is None:
+            exclude_scans = ()
+        
+        self.dir = pathlib.Path(dir)
+        # glob everything
+        self.data_glob = sorted(self.dir.glob(f"{suffix}*{ext}"))
+        # filter runs
+        # run ID string formatting
+        runs = [format(r, run_format) for r in runs]
+        # select only scans belonging to the specified runs
+        # self.data_list = [d for d in self.data_list if d.stem[(-int(run_format)-int(scan_format)-len(run_scan_sep)):(-int(scan_format)-len(run_scan_sep))] in runs]
+        self.data_list = []
+        for d in self.data_glob:
+            if d.stem[(-int(run_format)-int(scan_format)-len(run_scan_sep)):(-int(scan_format)-len(run_scan_sep))] in runs:
+                self.data_list.append(d)
+            elif run_scan_sep not in d.stem and (d.stem[-int(run_format):] in runs):
+                self.data_list.append(d)
+        # select scans
+        if scans is not None:
+            if isinstance(scans, int):
+                scans = [s for s in range(1, scans+1)]
+            # scan ID string formatting
+            scans = [format(s, scan_format) for s in scans if s not in exclude_scans]
+            self.data_list = [d for d in self.data_list if d.stem[-int(scan_format):] in scans]
+        return self.data_list
+    
+    def import_data(
+        self,
+        path,
+        data_list=None,
+        header=None,
+        left_str="D=",
+        right_str="A",
+        E_shift=0,
+        **kwargs
+    ):
+        '''
+        Reads a raw SPring-8 data file and outputs an array of mu vs. E.
+        '''
+        if data_list is not None:
+            self.data_list = data_list
+            
+        df = pd.read_csv(
+            path,
+            header=header,
+            **kwargs
+        )
+        
+        # get monochromator d-spacing
+        str = df[df.iloc[:, 0].str.contains('D=')].iloc[0, 0]
+        d_spacing = float(str[str.index(left_str)+len(left_str):str.index(right_str)])
+        
+        # find start of data
+        skiprows = df[df.iloc[:, 0].str.contains('Offset')].index.values[0] + 1
+        
+        # slice and dice
+        raw_arr = df.iloc[skiprows:, 0].str.split().apply(pd.to_numeric).apply(pd.Series).to_numpy()
+        arr = np.empty((len(raw_arr), 2))
+        # return mu vs E
+        arr[:, 0] = self.energy(raw_arr[:, 1], d_spacing) + E_shift
+        arr[:, 1] = -np.log(raw_arr[:, -1]/raw_arr[:, -2])
+        arr = arr[arr[:, 0].argsort(), :]
+        return arr
+    
+    def make_arr_list(
+        self,
+        arr_list=None,
+        data_list=None,
+        skipnan=True,
+        **kwargs
+    ):
+        if data_list is not None:
+            self.data_list = data_list
+        if arr_list is None:
+            self.arr_list = []
+        elif arr_list == 'append':
+            pass
+        else:
+            self.arr_list = arr_list
+        for f in self.data_list:
+            arr = self.import_data(f, **kwargs)
+            if skipnan and (np.isnan(arr).any()):
+                warnings.warn(f'{f} returned NaN values and was dropped.')
+            else:
+                self.arr_list.append(arr)
+        
+    def dump_ascii(
+        self,
+        output_file,
+        **kwargs
+    ):
+        if 'label' not in kwargs.keys():
+            kwargs['label'] = 'energy mu norm'
+        lio.write_ascii(
+            output_file, 
+            self.group.energy, 
+            self.group.mu, 
+            self.group.norm, 
+            **kwargs
+        )
+        
+    def shift_energy(
+        self,
+        E_shift=None,
+        E0_ref=None,
+        E0_act=None
+    ):
+        '''
+        Shifts all individual scans as well as the averaged mu vs E array and Larch group, if found.
+        E_shift takes priority if it is specified.
+        Otherwise, E_shift is calculated from the difference of E0_ref and E0_act.
+        By default, E0_act is taken from self.group.e0 found by Larch.
+        '''
+        if E0_act is None:
+            E0_act = self.group.e0
+        if E_shift is None:
+            E_shift = E0_ref - E0_act
+        for a in self.arr_list:
+            a[:, 0] += E_shift
+        # try:
+        #     self.arr_avg[:, 0] += E_shift
+        # except:
+        #     warnings.warn('arr_avg not found for E0 shift')
+        #     pass
+        try:
+            self.group.energy += E_shift
+        except:
+            warnings.warn('Larch group not found for E0 shift')
+            pass
+        try:
+            self.group.e0 += E_shift
+        except:
+            pass
+
+        
+    
+    def interpolate_and_average(
+        self,
+        bounds=None, 
+        step=0.1,
+        grid_points=None,
+        # s=0.01,
+        kind='cubic',
+        tiny=1e-6,
+        **kwargs
+    ):
+        kwargs['kind'] = kind
+        if grid_points is None:
+            # attempt to use min and max E from first array
+            if bounds is None:
+                bounds = [
+                    np.ceil(min(self.arr_list[0][:, 0]/step))*step,
+                    np.floor(max(self.arr_list[0][:, 0]/step))*step
+                ]
+            grid_points = np.arange(bounds[0], bounds[1], step)
+        self.mu_interp = np.empty((len(grid_points), len(self.arr_list)))
+        self.arr_avg = np.empty((len(grid_points), 2))
+        for i, arr in enumerate(self.arr_list):
+            self.mu_interp[:, i] = interp1d(
+                remove_dups(arr[:, 0], tiny=tiny),
+                arr[:, 1],
+                grid_points,
+                **kwargs
+            )
+            # self.mu_interp[:, i] = self.interpolate_and_resample(
+            # arr, bounds=bounds, step=step, grid_points=grid_points, s=s
+            # )[:, 1]
+        self.arr_avg[:, 0] = grid_points
+        self.arr_avg[:, 1] = np.average(self.mu_interp, axis=1)
+        self.arr_avg = self.arr_avg[~np.isnan(self.arr_avg).any(axis=1)]
+        
+        self.E_max = self.arr_avg[self.arr_avg[:, 1].argmax(), 0]
+        
+    def check_average(
+        self,
+        fig=None,
+        ax=None,
+        **kwargs
+    ):
+        if fig is None and (ax is None):
+            fig, ax = plt.subplots(**kwargs)
+        for a in self.arr_list:
+            ax.plot(a[:, 0], a[:, 1])
+        ax.plot(self.arr_avg[:, 0], self.arr_avg[:, 1])
+        try:
+            ax.plot(self.group.energy, self.group.mu, 'k--')
+        except:
+            pass
+        return fig, ax
+    
+    def make_group(
+        self,
+        pre_edge=True,
+        group_kwargs=None,
+        **kwargs
+    ):
+        '''
+        Create a Larch group from the averaged mu vs. E array.
+        Optionally, get E0 and do pre-edge subtraction.
+        '''
+        if group_kwargs is None:
+            group_kwargs = {}
+        self.group = Group(**group_kwargs)
+        self.group.energy = self.arr_avg[:, 0]
+        self.group.mu = self.arr_avg[:, 1]
+        if pre_edge:
+            lx.pre_edge(
+                self.group,
+                **kwargs
+            )
+    
+    @classmethod
+    def energy(cls, theta, d, n=1):
+        '''
+        Calculates energy from monochromator orientation and angle using Bragg's law.
+        '''
+        return 12398 / cls.bragg(theta, d, n)
+    
+    @staticmethod
+    def bragg(theta, d, n=1):
+        return n * 2 * d * np.sin(np.radians(theta))
+    
+    @staticmethod
+    def interpolate_and_resample(
+        arr, 
+        bounds=None, 
+        step=None,
+        grid_points=None,
+        s=0.001
+    ):
+        """
+        Use splines to reevaluate a DataFrame on a specified grid for a given column.
+        
+        Parameters:
+        df (pd.DataFrame): The DataFrame to reevaluate.
+        column (str): The column name to base the reevaluation on.
+        grid_points (array-like): The grid points to reevaluate the DataFrame on.
+        
+        Returns:
+        pd.DataFrame: The reevaluated DataFrame.
+        """
+        if grid_points is None:
+            grid_points = np.arange(bounds[0], bounds[1], step)
+        
+        arr_out = np.empty((len(grid_points), 2))
+        # print(arr[:, 0])
+        spline = UnivariateSpline(arr[:, 0], arr[:, 1], s=s)
+        arr_out[:, 0] = grid_points
+        arr_out[:, 1] = spline(grid_points)
+        return arr_out
+    
+    
+def read_ascii_append(f):
+    group = lio.read_ascii(
+        f,
+        labels='energy mu norm'
+    )
+    return f.stem, group
+
+def zipper(out):
+    u = []
+    v = []
+    for o in out:
+        u.append(o[0])
+        v.append(o[1])
+    return dict(zip(u, v))
+
+def plot_ekr(
+    group,
+    axs=None,
+    fig=None
+    ):
+    if (axs is None) or (fig is None):
+        fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
+    axs[0].plot(group.energy, group.norm)
+    axs[0].plot(group.energy, group.bkg)
+    axs[0].set_xlim(group.e0-30, group.e0+150)
+    axs[1].plot(group.k, group.k**3*group.chi)
+    axs[2].plot(group.r, group.chir_re)
+    axs[2].plot(group.r, group.chir_mag)
+    axs[2].set_xlim(0, 6)
+    fig.set_size_inches(9, 3)
+    return fig, axs
+
+def autobk_xftf(
+    k,
+    group,
+    autobk_kwargs=None,
+    xftf_kwargs=None
+):
+    if autobk_kwargs is None:
+        autobk_kwargs = {}
+    if xftf_kwargs is None:
+        xftf_kwargs = {}
+    lx.autobk(group.energy, group.norm, group=group, **autobk_kwargs)
+    lx.xftf(group.k, group.chi, group=group, **xftf_kwargs)
+    return k, group
+
+
+class Parsefeff:
+    
+    @staticmethod
+    def parse_feff(
+        std_dir,
+        renfeff_log='renfeff.log',
+        files_dat='files.dat',
+        skiprows=18
+    ):
+        renfeff_df = pd.read_csv(std_dir / renfeff_log, header=None)
+        renfeff_df.mask(~renfeff_df[0].str.contains('copying'), inplace=True)
+        renfeff_df.dropna(inplace=True)
+        renfeff_df = renfeff_df[0].str.split(' ', expand=True)
+        renfeff_df.drop([0, 2], axis=1, inplace=True)
+        renfeff_df.set_index(1, inplace=True)
+        renfeff_df.index = [int(x[4:8]) for x in renfeff_df.index.values]
+        
+        files_df = pd.read_csv(std_dir / files_dat, sep=r'\s+', skiprows=skiprows, header=None)
+        files_df.set_index(0, inplace=True)
+        files_df.index = [int(x[4:8]) for x in files_df.index.values]
+        
+        info_df = pd.concat([files_df, renfeff_df], axis=1)
+        info_df.columns = [
+            'sig2',
+            'amp_ratio',
+            'deg',
+            'nlegs',
+            'reff',
+            'path'
+        ]
+        return info_df
+
+    @staticmethod
+    def copy_paths(
+        df,
+        ks_dir,
+        std_dir,
+        col='path',
+        quiet=True
+    ):
+        """
+        Copy files from std_dir to ks_dir.
+        """
+        for f in df[col]:
+            p = std_dir / f
+            target = ks_dir / f
+            if target.exists():
+                if not quiet:
+                    warnings.warn('File {} already exists. Overwriting.'.format(target))
+                target.unlink()
+            target.hardlink_to(p)
+
+    @staticmethod
+    def edit_list(
+        sink_dir,
+        sink_df,
+        list_dat='list.dat',
+        list_bak='list.dat.bak',
+    ):
+        target = sink_dir / list_dat
+        backup = sink_dir / list_bak
+        try:
+            backup.hardlink_to(target)
+        except:
+            pass
+        sink_list = pd.read_csv(target, sep=r'\s+', header=None, skiprows=3, index_col=0)
+        sink_list_trimmed = sink_list.loc[sink_list.index.isin(sink_df.index)]
+        target.unlink()
+        with open(target, 'w') as f:
+            f.write('PATH  Rmax= 7.000,  Keep_limit= 0.00, Heap_limit 0.00  Pwcrit= 2.50%\n')
+            f.write(' -----------------------------------------------------------------------\n')
+            f.write('  pathindex     sig2   amp ratio    deg    nlegs  r effective\n')
+            for i in range(len(sink_list_trimmed)):
+                f.write('   {}   {}   {}   {}   {}\n'.format(
+                    sink_list_trimmed.index[i],
+                    sink_list_trimmed.iloc[i, 0],
+                    sink_list_trimmed.iloc[i, 2],
+                    int(sink_list_trimmed.iloc[i, 3]),
+                    sink_list_trimmed.iloc[i, 4],
+                ))
+        return sink_list_trimmed
+
+    @staticmethod
+    def gen_sink_df(
+        info_df,
+        explicit_df
+    ):
+        return info_df.loc[~info_df.index.isin(explicit_df.index)]
+
+    @staticmethod
+    def get_scatterers(
+        path,
+        skiprows=18
+    ):
+        df = pd.read_csv(path, skiprows=skiprows)
+        # remove leading whitespace, then find the index of the first row after the table of scatterers
+        idx = df.index[df.iloc[:, 0].str.lstrip().str.startswith('k')]
+        df = df.iloc[:idx[0], :]
+        # split the header into column names
+        columns = df.columns[0].split()
+        columns += ['at']
+        df = df.iloc[:, 0].str.split(expand=True)
+        df = df.iloc[:, :6]
+        df.columns = columns
+        # drop the absorbing atom
+        df.drop(axis=0, index=0, inplace=True)
+        return df
+
+    @staticmethod
+    def check_row_match(df1, df2):
+        # Perform an inner merge to find matching rows
+        matching_rows = pd.merge(df1, df2, how='inner')
+        return not matching_rows.empty
+
+    @classmethod
+    def find_paths(
+        cls,
+        path,
+        std_dir,
+        ext='f8',
+        **kwargs
+    ):
+        paths = sorted(std_dir.glob('*.{}'.format(ext)))
+        path_df_dict = {}
+        for f in paths:
+            path_df_dict[f.stem + '.{}'.format(ext)] = cls.get_scatterers(f, **kwargs)
+        keys_list = []
+        for k, df in path_df_dict.items():
+            if cls.check_row_match(path_df_dict[path], df):
+                keys_list.append(k)
+        return keys_list
