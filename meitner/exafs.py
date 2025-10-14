@@ -35,9 +35,9 @@ class Exafs:
         df should have columns ['Energy (eV)', 'Intensity', 'Ref Intensity']
         if both df and file are specified, df takes precedence
         '''
-        if df:
+        if df is not None:
             self.df = df
-        elif file:
+        elif file is not None:
             self.file = pathlib.Path(file)
             self.df = self.read_csv(self.file, **kwargs)
         
