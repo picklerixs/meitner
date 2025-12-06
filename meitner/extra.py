@@ -195,7 +195,7 @@ class Plot:
         # label settings
         xlabel=None,
         ylabel=None,
-        fontsize=12,
+        fontsize=None,
         label_preset=None,
     ):
         # quantitative axis settings
