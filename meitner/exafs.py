@@ -882,6 +882,193 @@ class Sp8:
         return arr_out
     
     
+class Larch:
+    
+    def __init__(
+        self,
+        groups: dict,
+    ):
+        """Initializes self.groups.
+
+        Args:
+            groups (dict): Dictionary of Larch groups.
+        """
+        self.groups = groups
+        self.feffit_outputs = []
+    
+    def plot_ekr_single(
+        self,
+        key,
+        fig=None,
+        axs=None,
+       **kwargs,
+    ):
+        if (axs is None) or (fig is None):
+            fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
+            
+        group = self.groups[key]
+        fig, axs = plot_ekr(
+            group,
+            fig=fig,
+            axs=axs,
+            **kwargs,
+        )
+        
+        return fig, axs
+    
+    def autobk_xftf_single(
+        self,
+        key,
+        **kwargs,
+    ):
+        group = self.groups[key]
+        autobk_xftf(
+            key,
+            self.groups[key],
+            **kwargs,
+        )
+    
+    def plot_ekr(
+        self,
+        keys=None,
+        autobk_xftf=True,
+        autobk_kwargs=None,
+        xftf_kwargs=None,
+        **kwargs,
+    ):
+        if keys is None:
+            keys = self.groups.keys()
+        
+        if autobk_kwargs is not None:
+            autobk_kwargs = self.check_nested_dictionaries(autobk_kwargs)
+        else:
+            autobk_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
+        
+        if xftf_kwargs is not None:
+            xftf_kwargs = self.check_nested_dictionaries(xftf_kwargs)
+        else:
+            xftf_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
+            
+        self.fig_ax_outputs = {}
+        for k in keys:
+            if autobk_xftf:
+                self.autobk_xftf_single(
+                    k,
+                    autobk_kwargs=autobk_kwargs[k],
+                    xftf_kwargs=xftf_kwargs[k],
+                )
+            
+            fig, axs = self.plot_ekr_single(
+                k,
+                **kwargs,
+            )
+            self.fig_ax_outputs[k] = (fig, axs)
+        
+        return self.fig_ax_outputs
+    
+    def plot_kr_fitted(
+        self,
+        keys=None,
+        feffit_outputs_index=-1,
+        k_ax_opts_kwargs: dict | None = None,
+        r_ax_opts_kwargs: dict | None = None,
+    ):  
+        if k_ax_opts_kwargs is None:
+            k_ax_opts_kwargs = {}
+            
+        if r_ax_opts_kwargs is None:
+            r_ax_opts_kwargs = {}
+        
+        feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
+        if keys is None:
+            keys = feffit_run_outputs.keys()
+            
+        fig_ax_outputs = {}
+        for k in keys:
+            v = feffit_run_outputs[k]
+            dset, _ = v
+            fig, axs = plt.subplots(nrows=1, ncols=2, layout='constrained', sharex='col', sharey='col')
+            axs[0].plot(dset.data.k, dset.data.chi*dset.data.k**3, color='k', linestyle='-')
+            axs[0].plot(dset.model.k, dset.model.chi*dset.data.k**3, 'b--')
+            axs[1].plot(dset.data.r, dset.data.chir_mag, 'k-')
+            axs[1].plot(dset.data.r, dset.data.chir_re, 'k-')
+            axs[1].plot(dset.model.r, dset.model.chir_mag, 'b--')
+            axs[1].plot(dset.model.r, dset.model.chir_re, 'b--')
+            axs[1].text(
+                0.95,
+                0.95,
+                k,
+                transform=axs[1].transAxes,
+                ha='right',
+                va='top',
+            )
+            Plot.ax_opts(
+                axs[0],
+                **k_ax_opts_kwargs,
+            )
+            Plot.ax_opts(
+                axs[1],
+                **r_ax_opts_kwargs,
+            )
+            fig_ax_outputs[k] = (fig, axs)
+            
+        return fig_ax_outputs
+    
+    def feffit(
+        self,
+        feff_paths,
+        parameter_group,
+        xftf_kwargs: dict = None,
+        keys: list[str] | None = None,
+        method: str = 'leastsq',
+        file_name_prefix: str | None = None,
+        save_directory: pathlib.Path | None = None,
+        feffit_run_index: int | None = None,
+    ):
+        if keys is None:
+            keys = self.groups.keys()
+            
+        if xftf_kwargs is not None:
+            xftf_kwargs = self.check_nested_dictionaries(xftf_kwargs)
+        else:
+            xftf_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
+            
+        feffit_run_outputs = {}
+        if feffit_run_index is None or (feffit_run_index > len(self.feffit_outputs)):
+            self.feffit_outputs.append({})
+            feffit_run_index = len(self.feffit_outputs)
+        if len(self.feffit_outputs) == 0:
+            self.feffit_outputs = [{}]
+            
+        for k in keys:
+            k_transformed_data = lx.feffit_transform(**xftf_kwargs[k])
+            feffit_dataset = lx.feffit_dataset(data=self.groups[k], pathlist=feff_paths, transform=k_transformed_data)
+            feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method)
+            feffit_run_outputs[k] = (feffit_dataset, feffit_output)
+            if file_name_prefix is not None:
+                file_name = str(file_name_prefix) + '_'
+            else:
+                file_name = ''
+                
+            if save_directory is not None:
+                file_name += f"{k}_run{feffit_run_index}.txt"
+                with open(save_directory / file_name, 'w') as f:
+                    f.write(lx.feffit_report(feffit_output))
+            
+        self.feffit_outputs[feffit_run_index-1] = feffit_run_outputs
+            
+        return feffit_run_outputs
+    
+    def check_nested_dictionaries(
+        self,
+        dictionary: dict,
+    ):
+        if not all([isinstance(v, dict) for v in dictionary.values()]):
+            dictionary = dict(zip(self.groups.keys(), [dictionary for _ in range(len(self.groups))]))
+        
+        return dictionary
+    
+    
 def read_ascii_append(f):
     group = lio.read_ascii(
         f,
@@ -900,16 +1087,21 @@ def zipper(out):
 def plot_ekr(
     group,
     axs=None,
-    fig=None
+    fig=None,
+    dxlim=(-30, 150),
+    xlim=None,
     ):
     if (axs is None) or (fig is None):
         fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
     axs[0].plot(group.energy, group.norm)
     axs[0].plot(group.energy, group.bkg)
-    axs[0].set_xlim(group.e0-30, group.e0+150)
+    if xlim is None:
+        xlim = (group.e0 + dxlim[0], group.e0 + dxlim[1])
+    axs[0].set_xlim(xlim)
     axs[1].plot(group.k, group.k**3*group.chi)
     axs[2].plot(group.r, group.chir_re)
     axs[2].plot(group.r, group.chir_mag)
+    axs[2].vlines(group.rbkg, -999, 999)
     axs[2].set_xlim(0, 6)
     fig.set_size_inches(9, 3)
     return fig, axs
