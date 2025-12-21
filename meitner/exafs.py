@@ -970,14 +970,62 @@ class Larch:
         self,
         keys=None,
         feffit_outputs_index=-1,
+        k_weight: int = 3,
+        k_plot_data_kwargs: dict | None = None,
+        r_plot_data_kwargs: dict | None = None,
+        k_plot_model_kwargs: dict | None = None,
+        r_plot_model_kwargs: dict | None = None,
         k_ax_opts_kwargs: dict | None = None,
         r_ax_opts_kwargs: dict | None = None,
+        plot_fit_window: bool = True,
+        fig_dimensions_inches: list | None = [6.5, 3.25],
     ):  
+        DEFAULT_DATA_COLOR = 'k'
+        DEFAULT_DATA_LINESTYLE = '-'
+        DEFAULT_MODEL_COLOR = '#4298B5'
+        DEFAULT_MODEL_LINESTYLE = '--'
+        
+        if k_plot_data_kwargs is None:
+            k_plot_data_kwargs = {}
+            
+        if r_plot_data_kwargs is None:
+            r_plot_data_kwargs = {}
+            
+        if k_plot_model_kwargs is None:
+            k_plot_model_kwargs = {}
+            
+        if r_plot_model_kwargs is None:
+            r_plot_model_kwargs = {}
+            
         if k_ax_opts_kwargs is None:
             k_ax_opts_kwargs = {}
             
         if r_ax_opts_kwargs is None:
             r_ax_opts_kwargs = {}
+            
+        if 'color' not in k_plot_data_kwargs:
+            k_plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
+            
+        if 'color' not in k_plot_model_kwargs:
+            k_plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
+            
+        if 'color' not in r_plot_data_kwargs:
+            r_plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
+            
+        if 'color' not in r_plot_model_kwargs:
+            r_plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
+            
+        if 'linestyle' not in k_plot_data_kwargs:
+            k_plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
+            
+        if 'linestyle' not in k_plot_model_kwargs:
+            k_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
+            
+        if 'linestyle' not in r_plot_data_kwargs:
+            r_plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
+            
+        if 'linestyle' not in r_plot_model_kwargs:
+            r_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
         
         feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
         if keys is None:
@@ -987,13 +1035,15 @@ class Larch:
         for k in keys:
             v = feffit_run_outputs[k]
             dset, _ = v
+            rmin = dset.transform.rmin
+            rmax = dset.transform.rmax
             fig, axs = plt.subplots(nrows=1, ncols=2, layout='constrained', sharex='col', sharey='col')
-            axs[0].plot(dset.data.k, dset.data.chi*dset.data.k**3, color='k', linestyle='-')
-            axs[0].plot(dset.model.k, dset.model.chi*dset.data.k**3, 'b--')
-            axs[1].plot(dset.data.r, dset.data.chir_mag, 'k-')
-            axs[1].plot(dset.data.r, dset.data.chir_re, 'k-')
-            axs[1].plot(dset.model.r, dset.model.chir_mag, 'b--')
-            axs[1].plot(dset.model.r, dset.model.chir_re, 'b--')
+            axs[0].plot(dset.data.k, dset.data.chi*dset.data.k**k_weight, **k_plot_data_kwargs)
+            axs[0].plot(dset.model.k, dset.model.chi*dset.data.k**k_weight, **k_plot_model_kwargs)
+            axs[1].plot(dset.data.r, dset.data.chir_mag, **r_plot_data_kwargs)
+            axs[1].plot(dset.data.r, dset.data.chir_re, **r_plot_data_kwargs)
+            axs[1].plot(dset.model.r, dset.model.chir_mag, **k_plot_model_kwargs)
+            axs[1].plot(dset.model.r, dset.model.chir_re, **k_plot_model_kwargs)
             axs[1].text(
                 0.95,
                 0.95,
@@ -1002,6 +1052,18 @@ class Larch:
                 ha='right',
                 va='top',
             )
+            if plot_fit_window:
+                axs[1].add_patch(
+                    patches.Rectangle(
+                        (rmin, -30),
+                        rmax - rmin,
+                        99,
+                        color=k_plot_model_kwargs['color'],
+                        alpha=0.1,
+                        zorder=0
+                    )
+                )
+                
             Plot.ax_opts(
                 axs[0],
                 **k_ax_opts_kwargs,
@@ -1010,6 +1072,9 @@ class Larch:
                 axs[1],
                 **r_ax_opts_kwargs,
             )
+            if fig_dimensions_inches is not None:
+                fig.set_size_inches(*fig_dimensions_inches)
+                
             fig_ax_outputs[k] = (fig, axs)
             
         return fig_ax_outputs
