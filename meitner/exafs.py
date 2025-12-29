@@ -969,6 +969,7 @@ class Larch:
     def plot_kr_fitted(
         self,
         keys=None,
+        feffit_run_outputs: dict | None = None,
         feffit_outputs_index=-1,
         k_weight: int = 3,
         k_plot_data_kwargs: dict | None = None,
@@ -1027,7 +1028,9 @@ class Larch:
         if 'linestyle' not in r_plot_model_kwargs:
             r_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
         
-        feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
+        if feffit_run_outputs is None:
+            feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
+            
         if keys is None:
             keys = feffit_run_outputs.keys()
             
@@ -1087,8 +1090,11 @@ class Larch:
         autobk_kwargs: dict | None = None,
         xftf_kwargs: dict | None = None,
         method: str = 'leastsq',
+        group=None
     ):
-        group = self.groups[key]
+        if group is None:
+            group = self.groups[key]
+            
         if autobk_kwargs is not None:
             lx.autobk(group.energy, group.norm, group=group, **autobk_kwargs)
             
