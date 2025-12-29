@@ -1079,17 +1079,39 @@ class Larch:
             
         return fig_ax_outputs
     
+    def feffit_single(
+        self,
+        key,
+        feff_paths,
+        parameter_group,
+        autobk_kwargs: dict | None = None,
+        xftf_kwargs: dict | None = None,
+        method: str = 'leastsq',
+    ):
+        group = self.groups[key]
+        if autobk_kwargs is not None:
+            lx.autobk(group.energy, group.norm, group=group, **autobk_kwargs)
+            
+        k_transformed_data = lx.feffit_transform(**xftf_kwargs)
+        feffit_dataset = lx.feffit_dataset(data=group, pathlist=feff_paths, transform=k_transformed_data)
+        feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method)
+        return [feffit_dataset, feffit_output]
+    
     def feffit(
         self,
         feff_paths,
         parameter_group,
-        xftf_kwargs: dict = None,
+        autobk_kwargs: dict | None = None,
+        xftf_kwargs: dict | None = None,
         keys: list[str] | None = None,
         method: str = 'leastsq',
         file_name_prefix: str | None = None,
         save_directory: pathlib.Path | None = None,
         feffit_run_index: int | None = None,
     ):
+        """
+        Fits the FEFF paths specified by feff_paths, parameterized by parameter_groups.
+        """
         if keys is None:
             keys = self.groups.keys()
             
@@ -1097,6 +1119,11 @@ class Larch:
             xftf_kwargs = self.check_nested_dictionaries(xftf_kwargs)
         else:
             xftf_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
+
+        if autobk_kwargs is not None:
+            autobk_kwargs = self.check_nested_dictionaries(autobk_kwargs)
+        else:
+            autobk_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
             
         feffit_run_outputs = {}
         if feffit_run_index is None or (feffit_run_index > len(self.feffit_outputs)):
@@ -1106,10 +1133,14 @@ class Larch:
             self.feffit_outputs = [{}]
             
         for k in keys:
-            k_transformed_data = lx.feffit_transform(**xftf_kwargs[k])
-            feffit_dataset = lx.feffit_dataset(data=self.groups[k], pathlist=feff_paths, transform=k_transformed_data)
-            feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method)
-            feffit_run_outputs[k] = (feffit_dataset, feffit_output)
+            feffit_run_outputs[k] = self.feffit_single(
+                k,
+                feff_paths,
+                parameter_group,
+                autobk_kwargs=autobk_kwargs[k],
+                xftf_kwargs=xftf_kwargs[k],
+                method=method,
+            )
             if file_name_prefix is not None:
                 file_name = str(file_name_prefix) + '_'
             else:
@@ -1118,7 +1149,7 @@ class Larch:
             if save_directory is not None:
                 file_name += f"{k}_run{feffit_run_index}.txt"
                 with open(save_directory / file_name, 'w') as f:
-                    f.write(lx.feffit_report(feffit_output))
+                    f.write(lx.feffit_report(feffit_run_outputs[k][1]))
             
         self.feffit_outputs[feffit_run_index-1] = feffit_run_outputs
             
