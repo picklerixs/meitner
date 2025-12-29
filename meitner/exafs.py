@@ -1,3 +1,4 @@
+import copy
 import pandas as pd
 import pathlib
 import numpy as np
@@ -1160,6 +1161,77 @@ class Larch:
         self.feffit_outputs[feffit_run_index-1] = feffit_run_outputs
             
         return feffit_run_outputs
+    
+    def iterative_background_fit(
+        self,
+        key: str,
+        rbkg_list: list,
+        rmin_list: list,
+        rmax_list: list,
+        initial_autobk_kwargs: dict,
+        initial_xftf_kwargs: dict,
+        feff_paths,
+        parameter_group,
+        kmin_list: list | None = None,
+        kmax_list: list | None = None,
+        initial_k_std = None,
+        initial_chi_std = None,
+        n_iter: int | None = None,
+        method: str = 'leastsq',
+        file_name_prefix: str | None = None,
+        save_directory: pathlib.Path | None = None,
+    ):
+        if n_iter is None:
+            n_iter = len(rbkg_list)
+            
+        autobk_kwargs = copy.copy(initial_autobk_kwargs)
+        xftf_kwargs = copy.copy(initial_xftf_kwargs)
+        k_std = initial_k_std
+        chi_std = initial_chi_std
+        
+        group = copy.copy(self.groups[key])
+        pars = copy.copy(parameter_group)
+            
+        feffit_run_outputs = {}
+        for j in range(n_iter):
+            autobk_kwargs['rbkg'] = rbkg_list[j]
+            autobk_kwargs['k_std'] = k_std
+            autobk_kwargs['chi_std'] = chi_std
+            xftf_kwargs['rmin'] = rmin_list[j]
+            xftf_kwargs['rmax'] = rmax_list[j]
+            
+            if kmin_list is not None:
+                xftf_kwargs['kmin'] = kmin_list[j]
+                
+            if kmax_list is not None:
+                xftf_kwargs['kmax'] = kmax_list[j]
+                
+            
+            feffit_run_outputs[j] = self.feffit_single(
+                "",
+                feff_paths,
+                pars,
+                autobk_kwargs=autobk_kwargs,
+                xftf_kwargs=xftf_kwargs,
+                method=method,
+                group=group,
+            )
+            
+            k_std = feffit_run_outputs[j][0].model.k
+            chi_std = feffit_run_outputs[j][0].model.chi
+            pars = feffit_run_outputs[j][1].params
+            
+            if file_name_prefix is not None:
+                file_name = str(file_name_prefix) + '_'
+            else:
+                file_name = ''
+                
+            if save_directory is not None:
+                file_name += f"{key}_iteration{j}.txt"
+                with open(save_directory / file_name, 'w') as f:
+                    f.write(lx.feffit_report(feffit_run_outputs[j][1]))
+            
+        return feffit_run_outputs, group, xftf_kwargs
     
     def check_nested_dictionaries(
         self,
