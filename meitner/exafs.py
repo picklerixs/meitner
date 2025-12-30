@@ -981,11 +981,16 @@ class Larch:
         r_ax_opts_kwargs: dict | None = None,
         plot_fit_window: bool = True,
         fig_dimensions_inches: list | None = [6.5, 3.25],
+        legend: bool = True,
+        file_name_prefix: str | None = None,
+        save_directory: pathlib.Path | None = None,
+        plot_text: bool = True,
     ):  
         DEFAULT_DATA_COLOR = 'k'
         DEFAULT_DATA_LINESTYLE = '-'
         DEFAULT_MODEL_COLOR = '#4298B5'
         DEFAULT_MODEL_LINESTYLE = '--'
+        DEFAULT_FONTSIZE = 12
         
         if k_plot_data_kwargs is None:
             k_plot_data_kwargs = {}
@@ -1028,6 +1033,13 @@ class Larch:
             
         if 'linestyle' not in r_plot_model_kwargs:
             r_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
+            
+        if 'fontsize' not in k_ax_opts_kwargs:
+            k_ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
+            
+        if 'fontsize' not in r_ax_opts_kwargs:
+            r_ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
+            
         
         if feffit_run_outputs is None:
             feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
@@ -1044,18 +1056,21 @@ class Larch:
             fig, axs = plt.subplots(nrows=1, ncols=2, layout='constrained', sharex='col', sharey='col')
             axs[0].plot(dset.data.k, dset.data.chi*dset.data.k**k_weight, **k_plot_data_kwargs)
             axs[0].plot(dset.model.k, dset.model.chi*dset.data.k**k_weight, **k_plot_model_kwargs)
-            axs[1].plot(dset.data.r, dset.data.chir_mag, **r_plot_data_kwargs)
+            axs[1].plot(dset.data.r, dset.data.chir_mag, label="Data", **r_plot_data_kwargs)
             axs[1].plot(dset.data.r, dset.data.chir_re, **r_plot_data_kwargs)
             axs[1].plot(dset.model.r, dset.model.chir_mag, **k_plot_model_kwargs)
             axs[1].plot(dset.model.r, dset.model.chir_re, **k_plot_model_kwargs)
-            axs[1].text(
-                0.95,
-                0.95,
-                k,
-                transform=axs[1].transAxes,
-                ha='right',
-                va='top',
-            )
+            if plot_text:
+                axs[1].text(
+                    0.95,
+                    0.95,
+                    k,
+                    transform=axs[1].transAxes,
+                    ha='right',
+                    va='top',
+                    fontsize=r_ax_opts_kwargs['fontsize'],
+                )
+                
             if plot_fit_window:
                 axs[1].add_patch(
                     patches.Rectangle(
@@ -1076,8 +1091,44 @@ class Larch:
                 axs[1],
                 **r_ax_opts_kwargs,
             )
+            
+            if legend:
+                custom_lines = [
+                    Line2D([0], [0], color=k_plot_data_kwargs['color'], linestyle=k_plot_data_kwargs['linestyle'], label=f'Data'),
+                    Line2D([0], [0], color=k_plot_model_kwargs['color'], linestyle=k_plot_model_kwargs['linestyle'], label=f'Fit')
+                ]
+                legend_kwargs = {
+                    'frameon': False,
+                    'fontsize': k_ax_opts_kwargs['fontsize'],
+                    'labelspacing': 0.25,
+                    'handlelength': 1.2
+                }
+                axs[0].legend(handles=custom_lines, 
+                    loc='lower right', 
+                    **legend_kwargs
+                )
+            
+                custom_lines = [
+                    Line2D([0], [0], color=r_plot_data_kwargs['color'], linestyle=r_plot_data_kwargs['linestyle'], label=f'Data'),
+                    Line2D([0], [0], color=r_plot_model_kwargs['color'], linestyle=r_plot_model_kwargs['linestyle'], label=f'Fit')
+                ]
+                legend_kwargs['fontsize'] = r_ax_opts_kwargs['fontsize']
+                axs[1].legend(handles=custom_lines, 
+                    loc='lower right', 
+                    **legend_kwargs
+                )
+            
             if fig_dimensions_inches is not None:
                 fig.set_size_inches(*fig_dimensions_inches)
+                
+            if file_name_prefix is not None:
+                file_name = str(file_name_prefix) + '_'
+            else:
+                file_name = ''
+                
+            if save_directory is not None:
+                file_name += f"{k}.svg"
+                fig.savefig(pathlib.Path(save_directory) / file_name)
                 
             fig_ax_outputs[k] = (fig, axs)
             
@@ -1155,7 +1206,7 @@ class Larch:
                 
             if save_directory is not None:
                 file_name += f"{k}_run{feffit_run_index}.txt"
-                with open(save_directory / file_name, 'w') as f:
+                with open(pathlib.Path(save_directory) / file_name, 'w') as f:
                     f.write(lx.feffit_report(feffit_run_outputs[k][1]))
             
         self.feffit_outputs[feffit_run_index-1] = feffit_run_outputs
