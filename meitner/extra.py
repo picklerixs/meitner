@@ -297,7 +297,7 @@ class Plot:
         ymajtm=None,
         ymintm=None,
         # line styling
-        axes_linewidth=1.35,
+        axes_linewidth=1.1,
         tick_linewidth=None,
         tick_length=None,
         tick_direction='out',
@@ -331,9 +331,9 @@ class Plot:
         if axes_linewidth:
             rcParams['axes.linewidth'] = axes_linewidth
         if not tick_linewidth:
-            tick_linewidth = axes_linewidth*0.9
+            tick_linewidth = axes_linewidth*0.99
         if not tick_length:
-            tick_length = axes_linewidth*5
+            tick_length = axes_linewidth*3.67
         ax.tick_params(
             direction=tick_direction,
             width=tick_linewidth,
@@ -343,7 +343,7 @@ class Plot:
             which='both'
             )
         ax.tick_params(
-            length=tick_length*0.5,
+            length=tick_length*0.6,
             axis='both',
             which='minor'
         )
