@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 import matplotlib.patches as patches
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
+from scipy.special import betainc
 
 import larch.io as lio
 import larch.xafs as lx
@@ -1344,6 +1345,59 @@ def autobk_xftf(
     lx.autobk(group.energy, group.norm, group=group, **autobk_kwargs)
     lx.xftf(group.k, group.chi, group=group, **xftf_kwargs)
     return k, group
+
+
+def hamilton_f(
+    null_r: float,
+    alternative_r: float,
+    null_parameters: float,
+    alternative_parameters: float,
+    n_independent: float,
+    b: float | None = None,
+):
+    '''
+    Computes the F-test significance of two fits with different numbers of independent parameters.
+    Only applies when the Fourier transform and fit ranges (and thus, the number of independent data points) are the same.
+    
+    :param null_r: Crystallographic R-factor (R^2) of the better (lower-R-factor) fit.
+    :type null_r: float
+    :param alternative_r: Crystallographic R-factor of the alternative fit.
+    :type alternative_r: float
+    :param null_parameters: Number of independent parameters in the null model.
+    :type null_parameters: float
+    :param alternative_parameters: Number of independent parameters in the alternative model.
+    :type alternative_parameters: float
+    :param n_independent: Number of independent data points.
+    :type n_independent: float
+    :param b: Description
+    :type b: float | None
+    '''
+    r = null_r / alternative_r
+    a = (n_independent - null_parameters) * 0.5
+    # b is the total number of free parameters, not the net number of free parameters
+    if b is None:
+        b = (null_parameters - alternative_parameters) * 0.5
+        
+    return 1 - betainc(a, b, r)
+
+
+def feffit_result_hamilton_f(
+    null_feffit_result,
+    alternative_feffit_result,
+    b: float | None = None,
+):
+    '''
+    Wrapper for `hamilton_f`.
+    
+    :param null_feffit_result: Larch result object of the better (lower-R-factor) fit.
+    :param alternative_feffit_result: Larch result object of the alternative fit.
+    '''
+    null_r = null_feffit_result.rfactor
+    null_parameters = null_feffit_result.nvarys
+    n_independent = null_feffit_result.n_independent
+    alternative_r = alternative_feffit_result.rfactor
+    alternative_parameters = alternative_feffit_result.nvarys
+    return hamilton_f(null_r, alternative_r, null_parameters, alternative_parameters, n_independent, b=b)
 
 
 class Parsefeff:
