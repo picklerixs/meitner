@@ -1265,8 +1265,8 @@ class Larch:
         if autobk_kwargs is not None:
             lx.autobk(group.energy, group.norm, group=group, **autobk_kwargs)
             
-        k_transformed_data = lx.feffit_transform(**xftf_kwargs)
-        feffit_dataset = lx.feffit_dataset(data=group, pathlist=feff_paths, transform=k_transformed_data)
+        transform = lx.feffit_transform(**xftf_kwargs)
+        feffit_dataset = lx.feffit_dataset(data=group, pathlist=feff_paths, transform=transform)
         feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method)
         return [feffit_dataset, feffit_output]
     
