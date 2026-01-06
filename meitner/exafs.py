@@ -1431,6 +1431,7 @@ def plot_ekr(
     dxlim=(-30, 150),
     xlim=None,
     label: str | None = None,
+    plot_window: bool = True,
     ):
     if (axs is None) or (fig is None):
         fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
@@ -1444,6 +1445,8 @@ def plot_ekr(
     axs[2].plot(group.r, group.chir_mag)
     axs[2].vlines(group.rbkg, -999, 999)
     axs[2].set_xlim(0, 6)
+    if plot_window:
+        axs[1].plot(group.k, group.kwin)
     # optional label in bottom-right of the first axis (axis-relative coords)
     if label is not None:
         axs[0].text(
