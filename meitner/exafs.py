@@ -1,4 +1,5 @@
 import copy
+import os
 import pandas as pd
 import pathlib
 import numpy as np
@@ -1019,6 +1020,9 @@ class Larch:
             fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
             
         group = self.groups[key]
+        # if no explicit label provided, use the key as the label
+        if 'label' not in kwargs:
+            kwargs['label'] = key
         fig, axs = plot_ekr(
             group,
             fig=fig,
@@ -1426,6 +1430,7 @@ def plot_ekr(
     fig=None,
     dxlim=(-30, 150),
     xlim=None,
+    label: str | None = None,
     ):
     if (axs is None) or (fig is None):
         fig, axs = plt.subplots(nrows=1, ncols=3, layout='constrained')
@@ -1439,6 +1444,16 @@ def plot_ekr(
     axs[2].plot(group.r, group.chir_mag)
     axs[2].vlines(group.rbkg, -999, 999)
     axs[2].set_xlim(0, 6)
+    # optional label in bottom-right of the first axis (axis-relative coords)
+    if label is not None:
+        axs[0].text(
+            0.95,
+            0.05,
+            label,
+            transform=axs[0].transAxes,
+            ha='right',
+            va='bottom',
+        )
     fig.set_size_inches(9, 3)
     return fig, axs
 
