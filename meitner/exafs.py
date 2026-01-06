@@ -1346,6 +1346,43 @@ def autobk_xftf(
     lx.xftf(group.k, group.chi, group=group, **xftf_kwargs)
     return k, group
 
+def generate_independent_path_parameters(
+    path_dict: dict,
+    std_dir: pathlib.Path,
+    s02: float = 1.0,
+    sig_initial: float = 0.005,
+    sig_kwargs: dict = {'min': 0.0001, 'max': 0.05, 'vary': True},
+    dr_initial: float = 0.0,
+    dr_kwargs: dict = {'min': -0.35, 'max': 0.35, 'vary': True},
+    n_kwargs: dict = {'vary': False},
+):
+    parameters = {}
+    feff_paths = []
+
+    for i, (k, n) in enumerate(path_dict.items()):
+        sigma2 = f'sig_{i}'
+        deltar = f'dr_{i}'
+            
+        parameters[f'sig_{i}'] = param(sig_initial, **sig_kwargs)
+        parameters[f'dr_{i}'] = param(dr_initial, **dr_kwargs)
+        parameters[f'n_{i}'] = param(n, **n_kwargs)
+        feffpath = lx.feffpath(
+            std_dir / k,
+            s02=f's02*n_{i}',
+            e0='de0',
+            deltar=deltar,
+            sigma2=sigma2,
+            degen=1
+        )
+        feff_paths.append(feffpath)
+        
+    parameter_group = param_group(
+        s02     = param(s02, vary=False, min=0.5, max=1.1),
+        de0     = param(0.0, vary=True, min=-20.0, max=20.0),
+        **parameters
+    )
+    
+    return feff_paths, parameter_group
 
 def hamilton_f(
     null_r: float,
