@@ -898,6 +898,116 @@ class Larch:
         self.groups = groups
         self.feffit_outputs = []
     
+    def merge_groups(self, keys, *args, merge_group_key: str | None = None, overwrite: bool = True, **kwargs):
+        """Wrapper for `lio.merge_groups` that accepts keys from `self.groups` and
+        stores the resulting merged group back into `self.groups`.
+
+        Parameters
+        ----------
+        keys : str or iterable
+            A single key or an iterable of keys referring to entries in
+            `self.groups`.
+        *args, **kwargs
+            Forwarded to `lio.merge_groups`.
+        merge_group_key : str | None
+            Optional key name to use when storing the merged group in
+            `self.groups`. If `None`, a key is auto-generated from the
+            merged input keys (see implementation).
+
+        Returns
+        -------
+        group
+            The merged Larch group returned by `lio.merge_groups`.
+        """
+        # Normalize keys to a list of strings
+        if isinstance(keys, str):
+            keys = [keys]
+        elif not isinstance(keys, (list, tuple, set)):
+            try:
+                keys = list(keys)
+            except TypeError:
+                keys = [keys]
+
+        # Lookup group objects
+        groups = [self.groups[k] for k in keys]
+
+        # Call lio.merge_groups and get the resulting group
+        merged = lio.merge_groups(groups, *args, **kwargs)
+
+        # Decide on a key for the merged group and store it
+        if merge_group_key is None:
+            # attempt to compute a sensible stem from the input keys
+            try:
+                cp = os.path.commonprefix(keys)
+            except Exception:
+                cp = ''
+
+            stem = cp.rstrip('_')
+            if not stem:
+                # fallback: use prefix of first key up to last '_'
+                first = keys[0]
+                if '_' in first:
+                    stem = first.rsplit('_', 1)[0]
+                else:
+                    stem = first
+
+            merge_group_key = f"{stem}_merged_{len(keys)}"
+
+            # ensure uniqueness in self.groups
+            base = merge_group_key
+            i = 1
+            while merge_group_key in self.groups:
+                i += 1
+                merge_group_key = f"{base}_{i}"
+
+        # If user provided a key that already exists, warn and respect overwrite
+        if merge_group_key in self.groups:
+            warnings.warn(f"Group '{merge_group_key}' already exists.")
+            if not overwrite:
+                return self.groups[merge_group_key]
+
+        # store (or overwrite) merged group
+        self.groups[merge_group_key] = merged
+
+        return merged
+
+    def drop_groups(self, keys, missing: str = 'ignore'):
+        """Drop one or more groups from ``self.groups`` by key.
+
+        Parameters
+        ----------
+        keys : str or iterable
+            Single key or iterable of keys to remove from ``self.groups``.
+        missing : {'ignore', 'warn', 'raise'}, optional
+            Behavior when a requested key is not present. Defaults to 'ignore'.
+
+        Returns
+        -------
+        list
+            List of keys that were removed.
+        """
+        if isinstance(keys, str):
+            keys = [keys]
+        elif not isinstance(keys, (list, tuple, set)):
+            try:
+                keys = list(keys)
+            except TypeError:
+                keys = [keys]
+
+        removed = []
+        for k in keys:
+            if k in self.groups:
+                del self.groups[k]
+                removed.append(k)
+            else:
+                if missing == 'warn':
+                    warnings.warn(f"Group '{k}' not found; skipping drop.")
+                elif missing == 'raise':
+                    raise KeyError(f"Group '{k}' not found in Larch.groups")
+                # if 'ignore', do nothing
+
+        return removed
+    
     def plot_ekr_single(
         self,
         key,
