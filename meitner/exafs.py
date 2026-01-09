@@ -897,7 +897,8 @@ class Larch:
             groups (dict): Dictionary of Larch groups.
         """
         self.groups = groups
-        self.feffit_outputs = []
+        self.feffit_run_index: int = 0
+        self.feffit_outputs: dict = {self.feffit_run_index: None}
     
     def merge_groups(self, keys, *args, merge_group_key: str | None = None, overwrite: bool = True, **kwargs):
         """Wrapper for `lio.merge_groups` that accepts keys from `self.groups` and
@@ -1086,7 +1087,7 @@ class Larch:
         self,
         keys=None,
         feffit_run_outputs: dict | None = None,
-        feffit_outputs_index=-1,
+        feffit_run_index: int | None = None,
         k_weight: int = 3,
         k_plot_data_kwargs: dict | None = None,
         r_plot_data_kwargs: dict | None = None,
@@ -1155,9 +1156,17 @@ class Larch:
         if 'fontsize' not in r_ax_opts_kwargs:
             r_ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
             
+        ## if no run index is specified, will use the last set one
+        if feffit_run_index is None:
+            feffit_run_index = self.feffit_run_index
         
+        ## if no dictionary of FEFFIT outputs is given, will pull from cached runs
         if feffit_run_outputs is None:
-            feffit_run_outputs = self.feffit_outputs[feffit_outputs_index]
+            feffit_run_outputs = self.feffit_outputs[feffit_run_index]
+            
+        ## handle output from feffit_multi_aligned
+        if isinstance(feffit_run_outputs, list):
+            feffit_run_outputs = feffit_run_outputs[0]
             
         if keys is None:
             keys = feffit_run_outputs.keys()
@@ -1165,7 +1174,10 @@ class Larch:
         fig_ax_outputs = {}
         for k in keys:
             v = feffit_run_outputs[k]
-            dset, _ = v
+            if isinstance(v, list) or isinstance(v, tuple):
+                dset, _ = v
+            else:
+                dset = v
             rmin = dset.transform.rmin
             rmax = dset.transform.rmax
             fig, axs = plt.subplots(nrows=1, ncols=2, layout='constrained', sharex='col', sharey='col')
@@ -1284,6 +1296,8 @@ class Larch:
     ):
         """
         Fits the FEFF paths specified by feff_paths, parameterized by parameter_groups.
+        Outputs a dictionary of [feffit_dataset, feffit_output] for each group that was (individually) fitted.
+        
         """
         if keys is None:
             keys = self.groups.keys()
@@ -1299,11 +1313,11 @@ class Larch:
             autobk_kwargs = dict(zip(self.groups.keys(), [None for _ in range(len(self.groups))]))
             
         feffit_run_outputs = {}
-        if feffit_run_index is None or (feffit_run_index > len(self.feffit_outputs)):
-            self.feffit_outputs.append({})
-            feffit_run_index = len(self.feffit_outputs)
-        if len(self.feffit_outputs) == 0:
-            self.feffit_outputs = [{}]
+        ## auto-assign run index by incrementing to prevent accidental overwrite
+        if feffit_run_index is None:
+            self.feffit_run_index = max(self.feffit_outputs) + 1
+        else:
+            self.feffit_run_index = feffit_run_index
             
         for k in keys:
             feffit_run_outputs[k] = self.feffit_single(
@@ -1320,12 +1334,11 @@ class Larch:
                 file_name = ''
                 
             if save_directory is not None:
-                file_name += f"{k}_run{feffit_run_index}.txt"
+                file_name += f"{k}_run{self.feffit_run_index}.txt"
                 with open(pathlib.Path(save_directory) / file_name, 'w') as f:
                     f.write(lx.feffit_report(feffit_run_outputs[k][1]))
             
-        self.feffit_outputs[feffit_run_index-1] = feffit_run_outputs
-            
+        self.feffit_outputs[self.feffit_run_index] = feffit_run_outputs
         return feffit_run_outputs
     
     def iterative_background_fit(
