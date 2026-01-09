@@ -1341,6 +1341,33 @@ class Larch:
         self.feffit_outputs[self.feffit_run_index] = feffit_run_outputs
         return feffit_run_outputs
     
+    def feffit_multi_aligned(
+        self,
+        std_dir: pathlib.Path,
+        path_dict: dict,
+        linked_params: list | tuple,
+        feffit_run_index: int | None = None,
+        **kwargs,
+    ):
+        if 'keys' not in kwargs:
+            kwargs['keys'] = None
+            
+        ## auto-assign run index by incrementing to prevent accidental overwrite
+        if feffit_run_index is None:
+            self.feffit_run_index = max(self.feffit_outputs) + 1
+        else:
+            self.feffit_run_index = feffit_run_index
+            
+        feffit_datasets, feffit_output = feffit_multi_aligned(
+            self.groups,
+            std_dir,
+            path_dict,
+            linked_params,
+            **kwargs,
+        )
+        
+        self.feffit_outputs[self.feffit_run_index] = [feffit_datasets, feffit_output]
+    
     def iterative_background_fit(
         self,
         key: str,
@@ -1524,6 +1551,90 @@ def generate_independent_path_parameters(
     )
     
     return feff_paths, parameter_group
+
+def feffit_multi_aligned(
+    groups: dict,
+    std_dir: pathlib.Path,
+    path_dict: dict,
+    linked_params: list | tuple,
+    keys=None,
+    param_suffixes: dict | None = None,
+    method='leastsq',
+    xftf_kwargs: dict | None = None,
+    sig_initial: float = 0.005,
+    sig_kwargs: dict = {'min': 0.0001, 'max': 0.05, 'vary': True},
+    dr_initial: float = 0.0,
+    dr_kwargs: dict = {'min': -0.35, 'max': 0.15, 'vary': True},
+    n_kwargs: dict = {'vary': False},
+    s02: float = 1.0,
+    save_file: pathlib.Path | None = None,
+):
+    """
+    linked params: de0, n, dr, sig
+    """
+    LINKABLE_PARAMS = ("n", "de0", "dr", "sig")
+    PARAM_NAMES_TO_FEFFPATH_KWARGS = {
+        "n": "s02",
+        "de0": "e0",
+        "dr": "deltar",
+        "sig": "sigma2",
+    }
+    
+    if keys is None:
+        keys = groups.keys()
+        
+    if param_suffixes is None:
+        param_suffixes = dict(zip(keys, keys))
+        
+    if xftf_kwargs is None:
+        xftf_kwargs = {}
+        
+    trans = lx.feffit_transform(**xftf_kwargs)
+
+    parameter_dict: dict = {}
+    feffit_datasets: dict = {}
+    
+    ## iterate over selected groups
+    for key in keys:
+        pathlist = []
+        for i, (path_name, n) in enumerate(path_dict.items()):
+            ## default names for linked parameters for each path (i)
+            feffpath_kwargs = {
+                "s02": f"s02*n_{i}",
+                "e0": f"de0",
+                "deltar": f"dr_{i}",
+                "sigma2": f"sig_{i}",
+                "degen": 1,
+            }
+            ## for independent paths, append a group-specific suffix
+            for p in LINKABLE_PARAMS:
+                if p not in linked_params:
+                    feffpath_kwargs[PARAM_NAMES_TO_FEFFPATH_KWARGS[p]] += f"_{param_suffixes[key]}"
+                    
+            parameter_dict[feffpath_kwargs["e0"]] = param(0.0, min=-20.0, max=20.0, vary=True)
+            parameter_dict[feffpath_kwargs["sigma2"]] = param(sig_initial, **sig_kwargs)
+            parameter_dict[feffpath_kwargs["deltar"]] = param(dr_initial, **dr_kwargs)
+            parameter_dict[feffpath_kwargs["s02"][4:]] = param(n, **n_kwargs)
+            feffpath = lx.feffpath(
+                std_dir / path_name,
+                **feffpath_kwargs,
+            )
+            pathlist.append(feffpath)
+            
+        feffit_datasets[key] = lx.feffit_dataset(data=groups[key], pathlist=pathlist, transform=trans)
+
+    parameter_group = param_group(
+        s02=param(s02, vary=False, min=0.5, max=1.1),
+        **parameter_dict
+    )
+
+    results = lx.feffit(parameter_group, feffit_datasets.values(), method=method)
+
+    if save_file is not None:
+        with open(save_file, 'w') as f:
+            f.write(lx.feffit_report(results))
+
+    return feffit_datasets, results
 
 def hamilton_f(
     null_r: float,
