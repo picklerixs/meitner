@@ -900,7 +900,7 @@ class Larch:
         self.feffit_run_index: int = 0
         self.feffit_outputs: dict = {self.feffit_run_index: None}
     
-    def merge_groups(self, keys, *args, merge_group_key: str | None = None, overwrite: bool = True, **kwargs):
+    def merge_groups(self, *args, keys=None, merge_group_key: str | None = None, overwrite: bool = True, drop_merged=False, **kwargs):
         """Wrapper for `lio.merge_groups` that accepts keys from `self.groups` and
         stores the resulting merged group back into `self.groups`.
 
@@ -922,7 +922,9 @@ class Larch:
             The merged Larch group returned by `lio.merge_groups`.
         """
         # Normalize keys to a list of strings
-        if isinstance(keys, str):
+        if keys is None:
+            keys = self.groups.keys()
+        elif isinstance(keys, str):
             keys = [keys]
         elif not isinstance(keys, (list, tuple, set)):
             try:
@@ -934,6 +936,7 @@ class Larch:
         groups = [self.groups[k] for k in keys]
 
         # Call lio.merge_groups and get the resulting group
+        print(groups)
         merged = lio.merge_groups(groups, *args, **kwargs)
 
         # Decide on a key for the merged group and store it
@@ -970,6 +973,10 @@ class Larch:
 
         # store (or overwrite) merged group
         self.groups[merge_group_key] = merged
+        
+        if drop_merged:
+            drop_keys = [k for k in self.groups.keys() if k is not merge_group_key]
+            self.drop_groups(drop_keys)
 
         return merged
 
