@@ -5,11 +5,20 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 
+from lmfit import Model
 from matplotlib.lines import Line2D
 import matplotlib.patches as patches
 from scipy.signal import decimate, resample, savgol_filter
 from scipy.interpolate import UnivariateSpline
 from scipy.special import betainc
+import scipy.constants as consts
+
+# STOLEN FROM LARCH HEHE
+# EINS_FACTOR  = hbarc*hbarc/(2 * k_boltz * amu) = 24.254360157751783 Ang^2 * K * amu
+#    k_boltz = 8.6173324e-5  # [eV / K]
+#    amu     = 931.494061e6  # [eV / (c*c)]
+#    hbarc   = 1973.26938    # [eV * A]
+EINS_FACTOR = 1.e20*consts.hbar**2/(2*consts.k*consts.atomic_mass)
 
 import larch.io as lio
 import larch.xafs as lx
@@ -1695,6 +1704,42 @@ def feffit_result_hamilton_f(
     alternative_parameters = alternative_feffit_result.nvarys
     return hamilton_f(null_r, alternative_r, null_parameters, alternative_parameters, n_independent, b=b)
 
+def einstein_model(temperature_K, einstein_temperature_K, static_disorder, mass_1_amu, mass_2_amu):
+    reduced_mass_amu = mass_1_amu * mass_2_amu / (mass_1_amu + mass_2_amu)
+    return EINS_FACTOR/(reduced_mass_amu * einstein_temperature_K * np.tanh(0.5 * einstein_temperature_K / temperature_K)) + static_disorder
+
+def fit_einstein_model(temperature_K, sigma_A2, mass_1_amu, mass_2_amu, sigma_A2_error=None, parameter_hints: dict | None = None):
+    DEFAULT_PARAMETER_HINTS = {
+            'einstein_temperature_K': {
+                'value': 300.0,
+                'min': 0.0,
+                'max': 999.9,
+            },
+            'static_disorder': {
+                'value': 0.0005,
+                'min': 0.0,
+                'max': 0.05,
+            },
+        }
+    
+    if parameter_hints is None:
+        parameter_hints = DEFAULT_PARAMETER_HINTS
+    
+    model = Model(einstein_model, independent_vars=['temperature_K', 'mass_1_amu', 'mass_2_amu'])
+    for parameter in DEFAULT_PARAMETER_HINTS:
+        if parameter not in parameter_hints:
+            parameter_hints[parameter] = DEFAULT_PARAMETER_HINTS[parameter]
+            
+        model.set_param_hint(parameter, **parameter_hints[parameter])
+        
+    parameters = model.make_params()
+    
+    weights = None
+    if sigma_A2_error is not None:
+        weights = 1.0 / np.asarray(sigma_A2_error)
+    
+    return model.fit(sigma_A2, params=parameters, temperature_K=temperature_K, mass_1_amu=mass_1_amu, mass_2_amu=mass_2_amu, weights=weights)
+            
 
 class Parsefeff:
     
