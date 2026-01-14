@@ -1099,6 +1099,216 @@ class Larch:
         
         return self.fig_ax_outputs
     
+    def plot_k_fitted(
+        self,
+        dset,
+        key: str,
+        k_weight: int = 3,
+        plot_data_kwargs: dict | None = None,
+        plot_model_kwargs: dict | None = None,
+        ax_opts_kwargs: dict | None = None,
+        legend: bool = True,
+        fig=None,
+        ax=None,
+    ):
+        """Plot k-space fitted data and model.
+        
+        Parameters
+        ----------
+        dset : FeffitDataset
+            The dataset containing data and model.
+        key : str
+            Key name for labeling.
+        k_weight : int, optional
+            k-weighting power, by default 3.
+        plot_data_kwargs : dict, optional
+            Kwargs for plotting data.
+        plot_model_kwargs : dict, optional
+            Kwargs for plotting model.
+        ax_opts_kwargs : dict, optional
+            Kwargs for axis options.
+        legend : bool, optional
+            Whether to show legend, by default True.
+        fig : Figure, optional
+            Matplotlib figure.
+        ax : Axes, optional
+            Matplotlib axes.
+            
+        Returns
+        -------
+        fig, ax
+            Matplotlib figure and axes.
+        """
+        DEFAULT_DATA_COLOR = 'k'
+        DEFAULT_DATA_LINESTYLE = '-'
+        DEFAULT_MODEL_COLOR = '#4298B5'
+        DEFAULT_MODEL_LINESTYLE = '--'
+        DEFAULT_FONTSIZE = 12
+        
+        if plot_data_kwargs is None:
+            plot_data_kwargs = {}
+        if plot_model_kwargs is None:
+            plot_model_kwargs = {}
+        if ax_opts_kwargs is None:
+            ax_opts_kwargs = {}
+            
+        if 'color' not in plot_data_kwargs:
+            plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
+        if 'color' not in plot_model_kwargs:
+            plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
+        if 'linestyle' not in plot_data_kwargs:
+            plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
+        if 'linestyle' not in plot_model_kwargs:
+            plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
+        if 'fontsize' not in ax_opts_kwargs:
+            ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
+            
+        if fig is None or ax is None:
+            fig, ax = plt.subplots()
+            
+        ax.plot(dset.data.k, dset.data.chi*dset.data.k**k_weight, **plot_data_kwargs)
+        ax.plot(dset.model.k, dset.model.chi*dset.data.k**k_weight, **plot_model_kwargs)
+        
+        Plot.ax_opts(ax, **ax_opts_kwargs)
+        
+        if legend:
+            custom_lines = [
+                Line2D([0], [0], color=plot_data_kwargs['color'], linestyle=plot_data_kwargs['linestyle'], label='Data'),
+                Line2D([0], [0], color=plot_model_kwargs['color'], linestyle=plot_model_kwargs['linestyle'], label='Fit')
+            ]
+            legend_kwargs = {
+                'frameon': False,
+                'fontsize': ax_opts_kwargs['fontsize'],
+                'labelspacing': 0.25,
+                'handlelength': 1.2
+            }
+            ax.legend(handles=custom_lines, loc='lower right', **legend_kwargs)
+            
+        return fig, ax
+    
+    def plot_r_fitted(
+        self,
+        dset,
+        key: str,
+        k_weight: int = 3,
+        plot_data_kwargs: dict | None = None,
+        plot_model_kwargs: dict | None = None,
+        ax_opts_kwargs: dict | None = None,
+        plot_fit_window: bool = True,
+        plot_model: bool = True,
+        legend: bool = True,
+        plot_text: bool = True,
+        fig=None,
+        ax=None,
+    ):
+        """Plot r-space fitted data and model.
+        
+        Parameters
+        ----------
+        dset : FeffitDataset
+            The dataset containing data and model.
+        key : str
+            Key name for labeling.
+        k_weight : int, optional
+            k-weighting power (not used in r-space but kept for consistency), by default 3.
+        plot_data_kwargs : dict, optional
+            Kwargs for plotting data.
+        plot_model_kwargs : dict, optional
+            Kwargs for plotting model.
+        ax_opts_kwargs : dict, optional
+            Kwargs for axis options.
+        plot_fit_window : bool, optional
+            Whether to plot fit window, by default True.
+        legend : bool, optional
+            Whether to show legend, by default True.
+        plot_text : bool, optional
+            Whether to show key text, by default True.
+        fig : Figure, optional
+            Matplotlib figure.
+        ax : Axes, optional
+            Matplotlib axes.
+            
+        Returns
+        -------
+        fig, ax
+            Matplotlib figure and axes.
+        """
+        DEFAULT_DATA_COLOR = 'k'
+        DEFAULT_DATA_LINESTYLE = '-'
+        DEFAULT_MODEL_COLOR = '#4298B5'
+        DEFAULT_MODEL_LINESTYLE = '--'
+        DEFAULT_FONTSIZE = 12
+        
+        if plot_data_kwargs is None:
+            plot_data_kwargs = {}
+        if plot_model_kwargs is None:
+            plot_model_kwargs = {}
+        if ax_opts_kwargs is None:
+            ax_opts_kwargs = {}
+            
+        if 'color' not in plot_data_kwargs:
+            plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
+        if 'color' not in plot_model_kwargs:
+            plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
+        if 'linestyle' not in plot_data_kwargs:
+            plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
+        if 'linestyle' not in plot_model_kwargs:
+            plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
+        if 'fontsize' not in ax_opts_kwargs:
+            ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
+            
+        if fig is None or ax is None:
+            fig, ax = plt.subplots()
+            
+        rmin = dset.transform.rmin
+        rmax = dset.transform.rmax
+        
+        ax.plot(dset.data.r, dset.data.chir_mag, label="Data", **plot_data_kwargs)
+        ax.plot(dset.data.r, dset.data.chir_re, **plot_data_kwargs)
+        if plot_model:
+            ax.plot(dset.model.r, dset.model.chir_mag, **plot_model_kwargs)
+            ax.plot(dset.model.r, dset.model.chir_re, **plot_model_kwargs)
+        
+        if plot_text:
+            ax.text(
+                0.95,
+                0.95,
+                key,
+                transform=ax.transAxes,
+                ha='right',
+                va='top',
+                fontsize=ax_opts_kwargs['fontsize'],
+            )
+            
+        if plot_fit_window:
+            ax.add_patch(
+                patches.Rectangle(
+                    (rmin, -30),
+                    rmax - rmin,
+                    99,
+                    color=plot_model_kwargs['color'],
+                    alpha=0.1,
+                    zorder=0
+                )
+            )
+            
+        Plot.ax_opts(ax, **ax_opts_kwargs)
+        
+        if legend:
+            custom_lines = [
+                Line2D([0], [0], color=plot_data_kwargs['color'], linestyle=plot_data_kwargs['linestyle'], label='Data'),
+                Line2D([0], [0], color=plot_model_kwargs['color'], linestyle=plot_model_kwargs['linestyle'], label='Fit')
+            ]
+            legend_kwargs = {
+                'frameon': False,
+                'fontsize': ax_opts_kwargs['fontsize'],
+                'labelspacing': 0.25,
+                'handlelength': 1.2
+            }
+            ax.legend(handles=custom_lines, loc='lower right', **legend_kwargs)
+            
+        return fig, ax
+    
     def plot_kr_fitted(
         self,
         keys=None,
@@ -1118,60 +1328,10 @@ class Larch:
         save_directory: pathlib.Path | None = None,
         plot_text: bool = True,
     ):  
-        DEFAULT_DATA_COLOR = 'k'
-        DEFAULT_DATA_LINESTYLE = '-'
-        DEFAULT_MODEL_COLOR = '#4298B5'
-        DEFAULT_MODEL_LINESTYLE = '--'
-        DEFAULT_FONTSIZE = 12
+        """Plot k-space and r-space fitted data and model in a two-panel figure.
         
-        if k_plot_data_kwargs is None:
-            k_plot_data_kwargs = {}
-            
-        if r_plot_data_kwargs is None:
-            r_plot_data_kwargs = {}
-            
-        if k_plot_model_kwargs is None:
-            k_plot_model_kwargs = {}
-            
-        if r_plot_model_kwargs is None:
-            r_plot_model_kwargs = {}
-            
-        if k_ax_opts_kwargs is None:
-            k_ax_opts_kwargs = {}
-            
-        if r_ax_opts_kwargs is None:
-            r_ax_opts_kwargs = {}
-            
-        if 'color' not in k_plot_data_kwargs:
-            k_plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
-            
-        if 'color' not in k_plot_model_kwargs:
-            k_plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
-            
-        if 'color' not in r_plot_data_kwargs:
-            r_plot_data_kwargs['color'] = DEFAULT_DATA_COLOR
-            
-        if 'color' not in r_plot_model_kwargs:
-            r_plot_model_kwargs['color'] = DEFAULT_MODEL_COLOR
-            
-        if 'linestyle' not in k_plot_data_kwargs:
-            k_plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
-            
-        if 'linestyle' not in k_plot_model_kwargs:
-            k_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
-            
-        if 'linestyle' not in r_plot_data_kwargs:
-            r_plot_data_kwargs['linestyle'] = DEFAULT_DATA_LINESTYLE
-            
-        if 'linestyle' not in r_plot_model_kwargs:
-            r_plot_model_kwargs['linestyle'] = DEFAULT_MODEL_LINESTYLE
-            
-        if 'fontsize' not in k_ax_opts_kwargs:
-            k_ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
-            
-        if 'fontsize' not in r_ax_opts_kwargs:
-            r_ax_opts_kwargs['fontsize'] = DEFAULT_FONTSIZE
-            
+        This method creates two-panel plots by calling plot_k_fitted() and plot_r_fitted().
+        """
         ## if no run index is specified, will use the last set one
         if feffit_run_index is None:
             feffit_run_index = self.feffit_run_index
@@ -1194,72 +1354,37 @@ class Larch:
                 dset, _ = v
             else:
                 dset = v
-            rmin = dset.transform.rmin
-            rmax = dset.transform.rmax
+            
+            # Create two-panel figure
             fig, axs = plt.subplots(nrows=1, ncols=2, layout='constrained', sharex='col', sharey='col')
-            axs[0].plot(dset.data.k, dset.data.chi*dset.data.k**k_weight, **k_plot_data_kwargs)
-            axs[0].plot(dset.model.k, dset.model.chi*dset.data.k**k_weight, **k_plot_model_kwargs)
-            axs[1].plot(dset.data.r, dset.data.chir_mag, label="Data", **r_plot_data_kwargs)
-            axs[1].plot(dset.data.r, dset.data.chir_re, **r_plot_data_kwargs)
-            axs[1].plot(dset.model.r, dset.model.chir_mag, **k_plot_model_kwargs)
-            axs[1].plot(dset.model.r, dset.model.chir_re, **k_plot_model_kwargs)
-            if plot_text:
-                axs[1].text(
-                    0.95,
-                    0.95,
-                    k,
-                    transform=axs[1].transAxes,
-                    ha='right',
-                    va='top',
-                    fontsize=r_ax_opts_kwargs['fontsize'],
-                )
-                
-            if plot_fit_window:
-                axs[1].add_patch(
-                    patches.Rectangle(
-                        (rmin, -30),
-                        rmax - rmin,
-                        99,
-                        color=k_plot_model_kwargs['color'],
-                        alpha=0.1,
-                        zorder=0
-                    )
-                )
-                
-            Plot.ax_opts(
-                axs[0],
-                **k_ax_opts_kwargs,
-            )
-            Plot.ax_opts(
-                axs[1],
-                **r_ax_opts_kwargs,
+            
+            # Plot k-space on left panel
+            self.plot_k_fitted(
+                dset=dset,
+                key=k,
+                k_weight=k_weight,
+                plot_data_kwargs=k_plot_data_kwargs,
+                plot_model_kwargs=k_plot_model_kwargs,
+                ax_opts_kwargs=k_ax_opts_kwargs,
+                legend=legend,
+                fig=fig,
+                ax=axs[0],
             )
             
-            if legend:
-                custom_lines = [
-                    Line2D([0], [0], color=k_plot_data_kwargs['color'], linestyle=k_plot_data_kwargs['linestyle'], label=f'Data'),
-                    Line2D([0], [0], color=k_plot_model_kwargs['color'], linestyle=k_plot_model_kwargs['linestyle'], label=f'Fit')
-                ]
-                legend_kwargs = {
-                    'frameon': False,
-                    'fontsize': k_ax_opts_kwargs['fontsize'],
-                    'labelspacing': 0.25,
-                    'handlelength': 1.2
-                }
-                axs[0].legend(handles=custom_lines, 
-                    loc='lower right', 
-                    **legend_kwargs
-                )
-            
-                custom_lines = [
-                    Line2D([0], [0], color=r_plot_data_kwargs['color'], linestyle=r_plot_data_kwargs['linestyle'], label=f'Data'),
-                    Line2D([0], [0], color=r_plot_model_kwargs['color'], linestyle=r_plot_model_kwargs['linestyle'], label=f'Fit')
-                ]
-                legend_kwargs['fontsize'] = r_ax_opts_kwargs['fontsize']
-                axs[1].legend(handles=custom_lines, 
-                    loc='lower right', 
-                    **legend_kwargs
-                )
+            # Plot r-space on right panel
+            self.plot_r_fitted(
+                dset=dset,
+                key=k,
+                k_weight=k_weight,
+                plot_data_kwargs=r_plot_data_kwargs,
+                plot_model_kwargs=r_plot_model_kwargs,
+                ax_opts_kwargs=r_ax_opts_kwargs,
+                plot_fit_window=plot_fit_window,
+                legend=legend,
+                plot_text=plot_text,
+                fig=fig,
+                ax=axs[1],
+            )
             
             if fig_dimensions_inches is not None:
                 fig.set_size_inches(*fig_dimensions_inches)
