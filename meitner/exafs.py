@@ -932,7 +932,7 @@ class Larch:
         """
         # Normalize keys to a list of strings
         if keys is None:
-            keys = self.groups.keys()
+            keys = list(self.groups.keys())
         elif isinstance(keys, str):
             keys = [keys]
         elif not isinstance(keys, (list, tuple, set)):
@@ -1596,6 +1596,18 @@ def read_ascii_append(f):
         labels='energy mu norm'
     )
     return f.stem, group
+
+def read_files_to_larch(files_dict: dict, groups: dict | None = None, **read_ascii_kwargs):
+    if groups is None:
+        groups = {}
+    if 'labels' not in read_ascii_kwargs:
+        read_ascii_kwargs['labels'] = 'energy mu norm'
+    for k, f in files_dict.items():
+        groups[k] = lio.read_ascii(
+            f,
+            **read_ascii_kwargs,
+        )
+    return Larch(groups)
 
 def zipper(out):
     u = []
