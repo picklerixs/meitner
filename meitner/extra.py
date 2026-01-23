@@ -135,6 +135,15 @@ class Plot:
     '''
     Methods for plot styling
     '''
+    
+    SLIDE_FULL_PLOT_DIMS_IN = (5, 4)
+    SLIDE_2_COLUMN_PLOT_DIMS_IN = (4.5, 4.5*0.8)
+    PAPER_SINGLE_COLUMN_PLOT_DIMS_IN = (3.25, 3.25*0.8)
+    SLIDE_FONTSIZE_PT = 14
+    PAPER_FONTSIZE_PT = 12
+    
+    AXES_LINEWIDTH = 1.1
+    
     def __init__(
         self
     ):
@@ -174,114 +183,6 @@ class Plot:
         colors = [cmap(int(x*cmap.N/ncolors)) for x in range(start,start+ncolors,1)]
         return colors[::-1] if reverse else colors
     
-    
-    def ax_opts(
-        self,
-        ax, 
-        # quantitative axis settings
-        xlim=None, 
-        ylim=None, 
-        xticks=None, 
-        yticks=None, 
-        xmajtm=None, 
-        xmintm=None,
-        ymajtm=None,
-        ymintm=None,
-        # line styling
-        axes_linewidth=1.35,
-        tick_linewidth=None,
-        tick_length=None,
-        tick_direction='out',
-        # label settings
-        xlabel=None,
-        ylabel=None,
-        fontsize=None,
-        label_preset=None,
-    ):
-        # quantitative axis settings
-        if xlim is not None:
-            ax.set_xlim(xlim)
-        if ylim is not None:
-            ax.set_ylim(ylim)
-            
-        if xticks is not None:
-            ax.set_xticks(xticks)
-        if yticks is not None:
-            ax.set_yticks(yticks)
-        # specifying major_tick_multiple overrides manual xticks spec
-        if xmajtm:
-            ax.xaxis.set_major_locator(MultipleLocator(xmajtm))
-        if xmintm:
-            ax.xaxis.set_minor_locator(MultipleLocator(xmintm))    
-        if ymajtm:
-            ax.yaxis.set_major_locator(MultipleLocator(ymajtm))
-        if ymintm:
-            ax.yaxis.set_minor_locator(MultipleLocator(ymintm))
-            
-        # line styling
-        if axes_linewidth:
-            rcParams['axes.linewidth'] = axes_linewidth
-        if not tick_linewidth:
-            tick_linewidth = axes_linewidth*0.9
-        if not tick_length:
-            tick_length = axes_linewidth*5
-        ax.tick_params(
-            direction=tick_direction,
-            width=tick_linewidth,
-            length=tick_length,
-            labelsize=fontsize,
-            axis='both',
-            which='both'
-        )
-        ax.tick_params(
-            length=tick_length*0.5,
-            axis='both',
-            which='minor'
-        )
-            
-            
-class Plot:
-    '''
-    Methods for plot styling
-    '''
-    def __init__(
-        self
-    ):
-        pass
-    
-    
-    @staticmethod
-    def set_rc(
-        font_families=['Arial','Noto Sans'],
-        usetex=False
-    ):
-        rc('font',**{'family':'sans-serif','sans-serif':font_families})
-        rc('text', usetex=usetex)
-    
-    
-    @staticmethod
-    def set_labels(
-        ax,
-        xlabel, 
-        ylabel, 
-        fontsize, 
-        **kwargs
-    ):
-        ax.set_xlabel(xlabel, fontsize=fontsize, **kwargs)
-        ax.set_ylabel(ylabel, fontsize=fontsize, **kwargs)
-    
-    
-    @staticmethod
-    def sample_colormap(
-        cmap,
-        ncolors,
-        start=0,
-        reverse=False
-    ):
-        cmap = getattr(plt.cm, cmap)
-        ncolors = min(cmap.N, ncolors)
-        colors = [cmap(int(x*cmap.N/ncolors)) for x in range(start,start+ncolors,1)]
-        return colors[::-1] if reverse else colors
     
     @classmethod
     def ax_opts(
@@ -297,14 +198,14 @@ class Plot:
         ymajtm=None,
         ymintm=None,
         # line styling
-        axes_linewidth=1.1,
+        axes_linewidth=AXES_LINEWIDTH,
         tick_linewidth=None,
         tick_length=None,
         tick_direction='out',
         # label settings
         xlabel=None,
         ylabel=None,
-        fontsize=12,
+        fontsize=PAPER_FONTSIZE_PT,
         label_preset=None,
     ):
         # quantitative axis settings
