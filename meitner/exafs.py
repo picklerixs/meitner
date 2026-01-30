@@ -1540,6 +1540,7 @@ class Larch:
         pars = copy.copy(parameter_group)
             
         feffit_run_outputs = {}
+        iterated_groups = []
         for j in range(n_iter):
             autobk_kwargs['rbkg'] = rbkg_list[j]
             autobk_kwargs['k_std'] = k_std
@@ -1564,6 +1565,8 @@ class Larch:
                 group=group,
             )
             
+            iterated_groups.append(copy.copy(group))
+            
             k_std = feffit_run_outputs[j][0].model.k
             chi_std = feffit_run_outputs[j][0].model.chi
             pars = feffit_run_outputs[j][1].params
@@ -1578,7 +1581,7 @@ class Larch:
                 with open(save_directory / file_name, 'w') as f:
                     f.write(lx.feffit_report(feffit_run_outputs[j][1]))
             
-        return feffit_run_outputs, group, xftf_kwargs
+        return feffit_run_outputs, group, xftf_kwargs, iterated_groups
     
     def check_nested_dictionaries(
         self,
