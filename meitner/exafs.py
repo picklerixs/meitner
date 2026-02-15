@@ -611,6 +611,7 @@ class Sp8:
         *args,
         data_list=None,
         E_shift=0,
+        is_fluorescence=False,
         import_data_kwargs=None,
         **kwargs
     ):
@@ -618,6 +619,8 @@ class Sp8:
             import_data_kwargs = {}
         if 'E_shift' not in import_data_kwargs.keys():
             import_data_kwargs['E_shift'] = E_shift
+        if 'is_fluorescence' not in import_data_kwargs.keys():
+            import_data_kwargs['is_fluorescence'] = is_fluorescence
         if data_list is not None:
             self.data_list = data_list
         else:
@@ -626,6 +629,9 @@ class Sp8:
         # self.arr_list = []
         # for f in self.data_list:
         #     self.arr_list.append(self.import_data(f, **import_data_kwargs))
+        
+        self.transmission_data = []
+        self.fluorescence_channels = []
     
     def path_generator(
         self,
@@ -676,6 +682,9 @@ class Sp8:
         left_str="D=",
         right_str="A",
         E_shift=0,
+        ndch=None,
+        drop_trailing_raw_cols=None,
+        is_fluorescence=False,
         **kwargs
     ):
         '''
@@ -694,18 +703,43 @@ class Sp8:
         str = df[df.iloc[:, 0].str.contains('D=')].iloc[0, 0]
         d_spacing = float(str[str.index(left_str)+len(left_str):str.index(right_str)])
         
+        # get number of detector channels
+        if ndch is None:
+            str = df[df.iloc[:, 0].str.contains('NDCH =')].iloc[0, 0]
+            ndch = int(str[-1])
+        
         # find start of data
         skiprows = df[df.iloc[:, 0].str.contains('Offset')].index.values[0] + 1
         
         # slice and dice
         raw_arr = df.iloc[skiprows:, 0].str.split().apply(pd.to_numeric).apply(pd.Series).to_numpy()
-        arr = np.empty((len(raw_arr), 2))
-        # return mu vs E
-        arr[:, 0] = self.energy(raw_arr[:, 1], d_spacing) + E_shift
-        arr[:, 1] = -np.log(raw_arr[:, -1]/raw_arr[:, -2])
-        arr = arr[arr[:, 0].argsort(), :]
-        return arr
-    
+        if drop_trailing_raw_cols is None:
+            if ndch > 3:
+                drop_trailing_raw_cols = ndch
+            else:
+                drop_trailing_raw_cols = 0
+        
+        if drop_trailing_raw_cols > 0:
+            raw_arr = raw_arr[:, 0:-drop_trailing_raw_cols]
+        
+        energy = self.energy(raw_arr[:, 1], d_spacing) + E_shift
+        
+        transmission_data = np.empty((len(raw_arr), 2))
+        transmission_data[:, 0] = energy
+        transmission_data[:, 1] = -np.log(raw_arr[:, -1]/raw_arr[:, -2])
+        transmission_data = sort_by_column(transmission_data)
+        
+        if ndch > 3 and is_fluorescence:
+            fluorescence_channels = np.empty((len(raw_arr), ndch))
+            fluorescence_channels[:, 0] = energy
+            for i in range(ndch-2):
+                fluorescence_channels[:, i+1] = raw_arr[:, i+3] / raw_arr[:, -2]
+            fluorescence_channels[:, -1] = np.average(fluorescence_channels[:, 1:ndch-1], axis=1)
+            fluorescence_channels = sort_by_column(fluorescence_channels)
+            return np.column_stack((fluorescence_channels[:, 0], fluorescence_channels[:, -1]))
+        else:
+            return transmission_data
+            
     def make_arr_list(
         self,
         arr_list=None,
@@ -731,17 +765,28 @@ class Sp8:
     def dump_ascii(
         self,
         output_file,
+        save_norm=False,
         **kwargs
     ):
-        if 'label' not in kwargs.keys():
-            kwargs['label'] = 'energy mu norm'
-        lio.write_ascii(
-            output_file, 
-            self.group.energy, 
-            self.group.mu, 
-            self.group.norm, 
-            **kwargs
-        )
+        if save_norm:
+            if 'label' not in kwargs.keys():
+                kwargs['label'] = 'energy mu norm'
+            lio.write_ascii(
+                output_file, 
+                self.group.energy, 
+                self.group.mu, 
+                self.group.norm, 
+                **kwargs
+            )
+        else:
+            if 'label' not in kwargs.keys():
+                kwargs['label'] = 'energy mu'
+            lio.write_ascii(
+                output_file, 
+                self.group.energy, 
+                self.group.mu, 
+                **kwargs
+            )
         
     def shift_energy(
         self,
@@ -776,7 +821,7 @@ class Sp8:
         except:
             pass
 
-        
+    
     
     def interpolate_and_average(
         self,
@@ -788,32 +833,46 @@ class Sp8:
         tiny=1e-6,
         **kwargs
     ):
-        kwargs['kind'] = kind
-        if grid_points is None:
-            # attempt to use min and max E from first array
-            if bounds is None:
-                bounds = [
-                    np.ceil(min(self.arr_list[0][:, 0]/step))*step,
-                    np.floor(max(self.arr_list[0][:, 0]/step))*step
-                ]
-            grid_points = np.arange(bounds[0], bounds[1], step)
-        self.mu_interp = np.empty((len(grid_points), len(self.arr_list)))
-        self.arr_avg = np.empty((len(grid_points), 2))
+        # kwargs['kind'] = kind
+        # if grid_points is None:
+        #     # attempt to use min and max E from first array
+        #     if bounds is None:
+        #         bounds = [
+        #             np.ceil(min(self.arr_list[0][:, 0]/step))*step,
+        #             np.floor(max(self.arr_list[0][:, 0]/step))*step
+        #         ]
+        #     grid_points = np.arange(bounds[0], bounds[1], step)
+        # self.mu_interp = np.empty((len(grid_points), len(self.arr_list)))
+        # self.arr_avg = np.empty((len(grid_points), 2))
+        # for i, arr in enumerate(self.arr_list):
+        #     self.mu_interp[:, i] = interp1d(
+        #         remove_dups(arr[:, 0], tiny=tiny),
+        #         arr[:, 1],
+        #         grid_points,
+        #         **kwargs
+        #     )
+        #     # self.mu_interp[:, i] = self.interpolate_and_resample(
+        #     # arr, bounds=bounds, step=step, grid_points=grid_points, s=s
+        #     # )[:, 1]
+        # self.arr_avg[:, 0] = grid_points
+        # self.arr_avg[:, 1] = np.average(self.mu_interp, axis=1)
+        # self.arr_avg = self.arr_avg[~np.isnan(self.arr_avg).any(axis=1)]
+        
+        
+        grouplist = []
         for i, arr in enumerate(self.arr_list):
-            self.mu_interp[:, i] = interp1d(
-                remove_dups(arr[:, 0], tiny=tiny),
-                arr[:, 1],
-                grid_points,
-                **kwargs
-            )
-            # self.mu_interp[:, i] = self.interpolate_and_resample(
-            # arr, bounds=bounds, step=step, grid_points=grid_points, s=s
-            # )[:, 1]
-        self.arr_avg[:, 0] = grid_points
-        self.arr_avg[:, 1] = np.average(self.mu_interp, axis=1)
-        self.arr_avg = self.arr_avg[~np.isnan(self.arr_avg).any(axis=1)]
+            group = Group()
+            group.energy = arr[:, 0]
+            group.mu = arr[:, 1]
+            grouplist.append(group)
+            
+        merged_group = lio.merge_groups(grouplist, **kwargs)
+        self.arr_avg = np.empty((len(merged_group.energy), 2))
+        self.arr_avg[:, 0] = merged_group.energy
+        self.arr_avg[:, 1] = merged_group.mu
         
         self.E_max = self.arr_avg[self.arr_avg[:, 1].argmax(), 0]
+        
         
     def check_average(
         self,
@@ -825,9 +884,9 @@ class Sp8:
             fig, ax = plt.subplots(**kwargs)
         for a in self.arr_list:
             ax.plot(a[:, 0], a[:, 1])
-        ax.plot(self.arr_avg[:, 0], self.arr_avg[:, 1])
+        ax.plot(self.arr_avg[:, 0], self.arr_avg[:, 1], 'k-')
         try:
-            ax.plot(self.group.energy, self.group.mu, 'k--')
+            ax.plot(self.group.energy, self.group.mu, 'k-')
         except:
             pass
         return fig, ax
@@ -1879,6 +1938,10 @@ def fit_einstein_model(temperature_K, sigma_A2, mass_1_amu, mass_2_amu, sigma_A2
         weights = 1.0 / np.asarray(sigma_A2_error)
     
     return model.fit(sigma_A2, params=parameters, temperature_K=temperature_K, mass_1_amu=mass_1_amu, mass_2_amu=mass_2_amu, weights=weights)
+            
+            
+def sort_by_column(arr, sort_index: int = 0):
+    return arr[arr[:, sort_index].argsort(), :]
             
 
 class Parsefeff:
