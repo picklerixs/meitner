@@ -1942,6 +1942,90 @@ def fit_einstein_model(temperature_K, sigma_A2, mass_1_amu, mass_2_amu, sigma_A2
             
 def sort_by_column(arr, sort_index: int = 0):
     return arr[arr[:, sort_index].argsort(), :]
+
+def group_to_ascii(
+    group,
+    name,
+    dir,
+    export_rs=True,
+    export_ks=True,
+    export_es=True,
+    **kwargs
+):
+    if 'index' not in kwargs:
+        kwargs['index'] = False
+    
+    if export_rs:
+        A = np.array([
+            group.r,
+            group.chir_mag,
+            group.chir_re,
+            group.chir_im,
+        ]).transpose()
+        A = pd.DataFrame(
+            A,
+            columns=['r', 'data_chir_mag', 'data_chir_re', 'data_chir_im']
+        )
+        A.to_csv(dir / f'{name}_rs.dat', **kwargs)
+    
+    if export_ks:
+        B = np.array([
+            group.k,
+            group.chi,
+        ]).transpose()
+        B = pd.DataFrame(
+            B,
+            columns=['k', 'data_chi']
+        )
+        B.to_csv(dir / f'{name}_ks.dat', **kwargs)
+    
+    if export_es:
+        C = np.array([
+            group.energy,
+            group.mu,
+            group.norm,
+        ]).transpose()
+        C = pd.DataFrame(
+            C,
+            columns=['energy', 'mu', 'norm']
+        )
+        C.to_csv(dir / f'{name}_es.dat', **kwargs)
+
+def dset_to_ascii(
+    dset,
+    name,
+    dir,
+    **kwargs
+):
+    if 'index' not in kwargs:
+        kwargs['index'] = False
+    
+    A = np.array([
+        dset.data.r,
+        dset.data.chir_mag,
+        dset.data.chir_re,
+        dset.data.chir_im,
+        dset.model.chir_mag,
+        dset.model.chir_re,
+        dset.model.chir_im,
+    ]).transpose()
+    A = pd.DataFrame(
+        A,
+        columns=['r', 'data_chir_mag', 'data_chir_re', 'data_chir_im', 'model_chir_mag', 'model_chir_re', 'model_chir_im']
+    )
+    
+    B = np.array([
+        dset.data.k,
+        dset.data.chi,
+        dset.model.chi,
+    ]).transpose()
+    B = pd.DataFrame(
+        B,
+        columns=['k', 'data_chi', 'model_chi']
+    )
+
+    A.to_csv(dir / f'{name}_rs.dat', **kwargs)
+    B.to_csv(dir / f'{name}_ks.dat', **kwargs)
             
 
 class Parsefeff:
