@@ -1698,10 +1698,12 @@ def plot_ekr(
     axs[1].plot(group.k, group.k**3*group.chi)
     axs[2].plot(group.r, group.chir_re)
     axs[2].plot(group.r, group.chir_mag)
-    axs[2].vlines(group.rbkg, -999, 999)
+    axs[2].vlines(group.rbkg, -999, 999, linestyle='--', color='gray')
     axs[2].set_xlim(0, 6)
+    abs_ylim = max(group.chir_mag) * 1.2
+    axs[2].set_ylim(-abs_ylim, abs_ylim)
     if plot_window:
-        axs[1].plot(group.k, group.kwin)
+        axs[1].plot(group.k, group.kwin * max(group.k**3*group.chi) * 1.1)
     # optional label in bottom-right of the first axis (axis-relative coords)
     if label is not None:
         axs[0].text(
@@ -1738,6 +1740,7 @@ def generate_independent_path_parameters(
     dr_initial: float = 0.0,
     dr_kwargs: dict = {'min': -0.35, 'max': 0.35, 'vary': True},
     n_kwargs: dict = {'vary': False},
+    de0_kwargs: dict = {'value': 0.0, 'min': -20.0, 'max': 20.0, 'vary': True},
 ):
     parameters = {}
     feff_paths = []
@@ -1761,7 +1764,7 @@ def generate_independent_path_parameters(
         
     parameter_group = param_group(
         s02     = param(s02, vary=False, min=0.5, max=1.1),
-        de0     = param(0.0, vary=True, min=-20.0, max=20.0),
+        de0     = param(**de0_kwargs),
         **parameters
     )
     
