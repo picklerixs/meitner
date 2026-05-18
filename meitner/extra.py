@@ -176,11 +176,30 @@ class Plot:
         cmap,
         ncolors,
         start=0,
-        reverse=False
+        reverse=False,
+        x_list=None
     ):
-        cmap = getattr(plt.cm, cmap)
-        ncolors = min(cmap.N, ncolors)
-        colors = [cmap(int(x*cmap.N/ncolors)) for x in range(start,start+ncolors,1)]
+        if isinstance(cmap, str):
+            cmap = getattr(plt.cm, cmap)
+
+        if x_list is not None:
+            x_vals = np.asarray(x_list, dtype=float)
+            if x_vals.size == 0:
+                colors = []
+            elif x_vals.size == 1:
+                colors = [cmap(0.0)]
+            else:
+                x0, x1 = x_vals[0], x_vals[-1]
+                if x1 == x0:
+                    sample_points = np.linspace(0.0, 1.0, x_vals.size)
+                else:
+                    sample_points = (x_vals - x0) / (x1 - x0)
+                sample_points = np.clip(sample_points, 0.0, 1.0)
+                colors = [cmap(x) for x in sample_points]
+        else:
+            ncolors = min(cmap.N, ncolors)
+            colors = [cmap(int(x*cmap.N/ncolors)) for x in range(start,start+ncolors,1)]
+
         return colors[::-1] if reverse else colors
     
     
