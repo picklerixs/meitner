@@ -1,4 +1,5 @@
 import copy
+from collections import Counter
 import os
 import pandas as pd
 import pathlib
@@ -1342,9 +1343,9 @@ class Larch:
         if plot_fit_window:
             ax.add_patch(
                 patches.Rectangle(
-                    (rmin, -30),
+                    (rmin, -5000),
                     rmax - rmin,
-                    99,
+                    10000,
                     color=plot_model_kwargs['color'],
                     alpha=0.1,
                     zorder=0
@@ -1469,7 +1470,8 @@ class Larch:
         autobk_kwargs: dict | None = None,
         xftf_kwargs: dict | None = None,
         method: str = 'leastsq',
-        group=None
+        group=None,
+        **kwargs,
     ):
         if group is None:
             group = self.groups[key]
@@ -1479,7 +1481,7 @@ class Larch:
             
         transform = lx.feffit_transform(**xftf_kwargs)
         feffit_dataset = lx.feffit_dataset(data=group, pathlist=feff_paths, transform=transform)
-        feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method)
+        feffit_output = lx.feffit(parameter_group, [feffit_dataset], method=method, **kwargs)
         return [feffit_dataset, feffit_output]
     
     def feffit(
@@ -1493,6 +1495,7 @@ class Larch:
         file_name_prefix: str | None = None,
         save_directory: pathlib.Path | None = None,
         feffit_run_index: int | None = None,
+        **kwargs,
     ):
         """
         Fits the FEFF paths specified by feff_paths, parameterized by parameter_groups.
@@ -1527,6 +1530,7 @@ class Larch:
                 autobk_kwargs=autobk_kwargs[k],
                 xftf_kwargs=xftf_kwargs[k],
                 method=method,
+                **kwargs,
             )
             if file_name_prefix is not None:
                 file_name = str(file_name_prefix) + '_'
@@ -1721,7 +1725,7 @@ def autobk_xftf(
     k,
     group,
     autobk_kwargs=None,
-    xftf_kwargs=None
+    xftf_kwargs=None,
 ):
     if autobk_kwargs is None:
         autobk_kwargs = {}
@@ -1741,6 +1745,7 @@ def generate_independent_path_parameters(
     dr_kwargs: dict = {'min': -0.35, 'max': 0.35, 'vary': True},
     n_kwargs: dict = {'vary': False},
     de0_kwargs: dict = {'value': 0.0, 'min': -20.0, 'max': 20.0, 'vary': True},
+    override_degen=True,
 ):
     parameters = {}
     feff_paths = []
@@ -1752,14 +1757,24 @@ def generate_independent_path_parameters(
         parameters[f'sig_{i}'] = param(sig_initial, **sig_kwargs)
         parameters[f'dr_{i}'] = param(dr_initial, **dr_kwargs)
         parameters[f'n_{i}'] = param(n, **n_kwargs)
-        feffpath = lx.feffpath(
-            std_dir / k,
-            s02=f's02*n_{i}',
-            e0='de0',
-            deltar=deltar,
-            sigma2=sigma2,
-            degen=1
-        )
+        if override_degen:
+            feffpath = lx.feffpath(
+                std_dir / k,
+                s02=f's02*n_{i}',
+                e0='de0',
+                deltar=deltar,
+                sigma2=sigma2,
+                degen=1
+            )
+        else:
+            feffpath = lx.feffpath(
+                std_dir / k,
+                s02=f's02*n_{i}',
+                e0='de0',
+                deltar=deltar,
+                sigma2=sigma2,
+            )
+            
         feff_paths.append(feffpath)
         
     parameter_group = param_group(
@@ -1769,6 +1784,62 @@ def generate_independent_path_parameters(
     )
     
     return feff_paths, parameter_group
+
+def generate_pathlist(
+    std_dir: pathlib.Path,
+    path_dict: dict,
+    linked_params: list | tuple,
+    param_suffix: str,
+    parameter_dict: dict,
+    sig_initial: float = 0.005,
+    sig_kwargs: dict = {'min': 0.0001, 'max': 0.05, 'vary': True},
+    dr_initial: float = 0.0,
+    dr_kwargs: dict = {'min': -0.35, 'max': 0.15, 'vary': True},
+    n_kwargs: dict = {'vary': False},
+    c3_initial: float = 0.0001,
+    c3_kwargs: dict | None = None,
+):
+    LINKABLE_PARAMS = ("n", "de0", "dr", "sig", "c3")
+    PARAM_NAMES_TO_FEFFPATH_KWARGS = {
+        "n": "s02",
+        "de0": "e0",
+        "dr": "deltar",
+        "sig": "sigma2",
+        "c3": "third",
+    }
+    
+    if c3_kwargs is None:
+        c3_kwargs = {"vary": False}
+
+    pathlist = []
+    for i, (path_name, n) in enumerate(path_dict.items()):
+        ## default names for linked parameters for each path (i)
+        feffpath_kwargs = {
+            "s02": f"s02*n_{i}",
+            "e0": f"de0",
+            "deltar": f"dr_{i}",
+            "sigma2": f"sig_{i}",
+            "third": f"c3_{i}",
+            "degen": 1,
+        }
+        ## for independent paths, append a group-specific suffix
+        for p in LINKABLE_PARAMS:
+            if p not in linked_params:
+                feffpath_kwargs[PARAM_NAMES_TO_FEFFPATH_KWARGS[p]] += f"_{param_suffix}"
+
+        parameter_dict[feffpath_kwargs["e0"]] = param(0.0, min=-20.0, max=20.0, vary=True)
+        parameter_dict[feffpath_kwargs["sigma2"]] = param(sig_initial, **sig_kwargs)
+        parameter_dict[feffpath_kwargs["deltar"]] = param(dr_initial, **dr_kwargs)
+        parameter_dict[feffpath_kwargs["s02"][4:]] = param(n, **n_kwargs)
+        parameter_dict[feffpath_kwargs["third"]] = param(c3_initial, **c3_kwargs)
+
+        feffpath = lx.feffpath(
+            std_dir / path_name,
+            **feffpath_kwargs,
+        )
+        pathlist.append(feffpath)
+
+    return pathlist, parameter_dict
 
 def feffit_multi_aligned(
     groups: dict,
@@ -1784,20 +1855,16 @@ def feffit_multi_aligned(
     dr_initial: float = 0.0,
     dr_kwargs: dict = {'min': -0.35, 'max': 0.15, 'vary': True},
     n_kwargs: dict = {'vary': False},
+    c3_initial: float = 0.0001,
+    c3_kwargs: dict | None = None,
     s02: float = 1.0,
     save_file: pathlib.Path | None = None,
+    pathlist_dict: dict | None = None,
+    parameter_dict: dict | None = None,
 ):
     """
-    linked params: de0, n, dr, sig
-    """
-    LINKABLE_PARAMS = ("n", "de0", "dr", "sig")
-    PARAM_NAMES_TO_FEFFPATH_KWARGS = {
-        "n": "s02",
-        "de0": "e0",
-        "dr": "deltar",
-        "sig": "sigma2",
-    }
-    
+    linked params: de0, n, dr, sig, c3
+    """    
     if keys is None:
         keys = groups.keys()
         
@@ -1807,42 +1874,41 @@ def feffit_multi_aligned(
     if xftf_kwargs is None:
         xftf_kwargs = {}
         
+    if c3_kwargs is None:
+        c3_kwargs = {"vary": False}
+        
     trans = lx.feffit_transform(**xftf_kwargs)
 
-    parameter_dict: dict = {}
+    if parameter_dict is None:
+        parameter_dict: dict = {}
+        
     feffit_datasets: dict = {}
     
     ## iterate over selected groups
     for key in keys:
-        pathlist = []
-        for i, (path_name, n) in enumerate(path_dict.items()):
-            ## default names for linked parameters for each path (i)
-            feffpath_kwargs = {
-                "s02": f"s02*n_{i}",
-                "e0": f"de0",
-                "deltar": f"dr_{i}",
-                "sigma2": f"sig_{i}",
-                "degen": 1,
-            }
-            ## for independent paths, append a group-specific suffix
-            for p in LINKABLE_PARAMS:
-                if p not in linked_params:
-                    feffpath_kwargs[PARAM_NAMES_TO_FEFFPATH_KWARGS[p]] += f"_{param_suffixes[key]}"
-                    
-            parameter_dict[feffpath_kwargs["e0"]] = param(0.0, min=-20.0, max=20.0, vary=True)
-            parameter_dict[feffpath_kwargs["sigma2"]] = param(sig_initial, **sig_kwargs)
-            parameter_dict[feffpath_kwargs["deltar"]] = param(dr_initial, **dr_kwargs)
-            parameter_dict[feffpath_kwargs["s02"][4:]] = param(n, **n_kwargs)
-            feffpath = lx.feffpath(
-                std_dir / path_name,
-                **feffpath_kwargs,
+        if pathlist_dict is not None and key in pathlist_dict:
+            pathlist = pathlist_dict[key]
+        else:
+            pathlist, parameter_sub_dict = generate_pathlist(
+                path_dict=path_dict,
+                std_dir=std_dir,
+                linked_params=linked_params,
+                param_suffix=param_suffixes[key],
+                parameter_dict=parameter_dict,
+                sig_initial=sig_initial,
+                sig_kwargs=sig_kwargs,
+                dr_initial=dr_initial,
+                dr_kwargs=dr_kwargs,
+                n_kwargs=n_kwargs,
+                c3_initial=c3_initial,
+                c3_kwargs=c3_kwargs,
             )
-            pathlist.append(feffpath)
+            parameter_dict.update(parameter_sub_dict)
             
         feffit_datasets[key] = lx.feffit_dataset(data=groups[key], pathlist=pathlist, transform=trans)
 
     parameter_group = param_group(
-        s02=param(s02, vary=False, min=0.5, max=1.1),
+        s02=param(s02, vary=False, min=0.5, max=1.25),
         **parameter_dict
     )
 
@@ -2030,6 +2096,145 @@ def dset_to_ascii(
     A.to_csv(dir / f'{name}_rs.dat', **kwargs)
     B.to_csv(dir / f'{name}_ks.dat', **kwargs)
             
+
+def parse_feff(
+    std_dir,
+    paths_dat='paths.dat',
+    renfeff_suffix='.f8',
+):
+    """Parse FEFF ``paths.dat`` and include related single-scattering paths.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns: ``index``, ``nleg``, ``degeneracy``, ``r``, ``ss paths``,
+        ``filename``, ``renfeff filename``.
+    """
+    path = pathlib.Path(std_dir) / paths_dat
+    renfeff_suffix = str(renfeff_suffix)
+    if len(renfeff_suffix) > 0 and (not renfeff_suffix.startswith('.')):
+        renfeff_suffix = f'.{renfeff_suffix}'
+
+    with open(path, 'r') as f:
+        lines = f.readlines()
+
+    entries = []
+    i = 0
+    n_lines = len(lines)
+
+    while i < n_lines:
+        line = lines[i]
+        if 'index, nleg, degeneracy, r=' not in line:
+            i += 1
+            continue
+
+        lhs, rhs = line.split('r=', maxsplit=1)
+        tokens = lhs.split()
+        if len(tokens) < 3:
+            i += 1
+            continue
+
+        index = int(tokens[0])
+        nleg = int(tokens[1])
+        degeneracy = float(tokens[2])
+        r = float(rhs.strip())
+
+        atoms = []
+        j = i + 1
+        while j < n_lines and len(atoms) < nleg:
+            # stop at the next entry header if this entry is malformed
+            if 'index, nleg, degeneracy, r=' in lines[j]:
+                break
+
+            atom_tokens = lines[j].split()
+            # atom rows begin with x, y, z and contain a quoted label
+            if len(atom_tokens) >= 5 and ("'" in lines[j]):
+                try:
+                    float(atom_tokens[0])
+                    float(atom_tokens[1])
+                    float(atom_tokens[2])
+                    ipot = int(atom_tokens[3])
+                except ValueError:
+                    j += 1
+                    continue
+
+                label_start = lines[j].find("'")
+                label_end = lines[j].find("'", label_start + 1)
+                if label_start != -1 and label_end != -1:
+                    label = lines[j][label_start + 1:label_end].strip()
+                    tail_tokens = lines[j][label_end + 1:].split()
+                    if len(tail_tokens) == 0:
+                        j += 1
+                        continue
+                    try:
+                        rleg = float(tail_tokens[0])
+                    except ValueError:
+                        j += 1
+                        continue
+
+                    atoms.append((ipot, label, round(rleg, 6)))
+            j += 1
+
+        entries.append(
+            {
+                'index': index,
+                'nleg': nleg,
+                'degeneracy': degeneracy,
+                'r': r,
+                'atoms': atoms,
+            }
+        )
+        i = j
+
+    ss_entries = []
+    for entry in entries:
+        if entry['nleg'] != 2:
+            continue
+
+        scatterers = [(label.upper(), rleg) for ipot, label, rleg in entry['atoms'] if ipot != 0]
+        if len(scatterers) == 0:
+            continue
+
+        # nleg==2 has one scatterer; use path header r as the matching distance
+        ss_entries.append((entry['index'], scatterers[0][0], round(entry['r'], 6)))
+
+    for entry in entries:
+        entry_atoms = Counter((label.upper(), rleg) for ipot, label, rleg in entry['atoms'] if ipot != 0)
+        related = []
+        for ss_index, ss_label, ss_r in ss_entries:
+            if entry_atoms[(ss_label, ss_r)] > 0:
+                related.append(ss_index)
+        related.sort()
+        entry['ss paths'] = related
+
+        entry['filename'] = f"feff{entry['index']:04d}.dat"
+
+        absorber_labels = [label for ipot, label, _ in entry['atoms'] if ipot == 0]
+        scatterer_labels = sorted([label for ipot, label, _ in entry['atoms'] if ipot != 0])
+        if len(absorber_labels) > 0:
+            atom_labels = [absorber_labels[0]] + scatterer_labels
+        else:
+            atom_labels = sorted([label for _, label, _ in entry['atoms']])
+
+        renfeff_stem = f"{'_'.join(atom_labels)}_{entry['r']:.4f}"
+        entry['renfeff filename'] = f"{renfeff_stem}{renfeff_suffix}"
+
+    return pd.DataFrame(
+        [
+            {
+                'index': entry['index'],
+                'nleg': entry['nleg'],
+                'degeneracy': entry['degeneracy'],
+                'r': entry['r'],
+                'ss paths': entry['ss paths'],
+                'filename': entry['filename'],
+                'renfeff filename': entry['renfeff filename'],
+            }
+            for entry in entries
+        ],
+        columns=['index', 'nleg', 'degeneracy', 'r', 'ss paths', 'filename', 'renfeff filename']
+    )
+
 
 class Parsefeff:
     
