@@ -1882,6 +1882,12 @@ def feffit_multi_aligned(
     feffit_datasets: dict = {}
 
     # Branch 1: use prebuilt FEFF paths and parameter group directly.
+    if parameter_dict is not None:
+        parameter_group = param_group(
+            s02=param(s02, vary=False, min=0.5, max=1.25),
+            **parameter_dict
+        )
+    
     if pathlist_dict is not None or parameter_group is not None:
         if pathlist_dict is None or parameter_group is None:
             raise ValueError("Both `pathlist_dict` and `parameter_group` must be provided together.")
