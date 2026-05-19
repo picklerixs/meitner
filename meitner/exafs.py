@@ -1547,9 +1547,9 @@ class Larch:
     
     def feffit_multi_aligned(
         self,
-        std_dir: pathlib.Path,
-        path_dict: dict,
-        linked_params: list | tuple,
+        std_dir: pathlib.Path | None = None,
+        path_dict: dict | None = None,
+        linked_params: list | tuple | None = None,
         feffit_run_index: int | None = None,
         **kwargs,
     ):
@@ -1563,14 +1563,15 @@ class Larch:
             self.feffit_run_index = feffit_run_index
             
         feffit_datasets, feffit_output = feffit_multi_aligned(
-            self.groups,
-            std_dir,
-            path_dict,
-            linked_params,
+            groups=self.groups,
+            std_dir=std_dir,
+            path_dict=path_dict,
+            linked_params=linked_params,
             **kwargs,
         )
         
         self.feffit_outputs[self.feffit_run_index] = [feffit_datasets, feffit_output]
+        return [feffit_datasets, feffit_output]
     
     def iterative_background_fit(
         self,
@@ -1796,7 +1797,7 @@ def generate_pathlist(
     dr_initial: float = 0.0,
     dr_kwargs: dict = {'min': -0.35, 'max': 0.15, 'vary': True},
     n_kwargs: dict = {'vary': False},
-    c3_initial: float = 0.0001,
+    c3_initial: float = 0.0,
     c3_kwargs: dict | None = None,
 ):
     LINKABLE_PARAMS = ("n", "de0", "dr", "sig", "c3")
@@ -1843,9 +1844,9 @@ def generate_pathlist(
 
 def feffit_multi_aligned(
     groups: dict,
-    std_dir: pathlib.Path,
-    path_dict: dict,
-    linked_params: list | tuple,
+    std_dir: pathlib.Path | None,
+    path_dict: dict | None,
+    linked_params: list | tuple | None,
     keys=None,
     param_suffixes: dict | None = None,
     method='leastsq',
@@ -1861,15 +1862,14 @@ def feffit_multi_aligned(
     save_file: pathlib.Path | None = None,
     pathlist_dict: dict | None = None,
     parameter_dict: dict | None = None,
+    parameter_group=None,
+    **kwargs,
 ):
     """
     linked params: de0, n, dr, sig, c3
     """    
     if keys is None:
         keys = groups.keys()
-        
-    if param_suffixes is None:
-        param_suffixes = dict(zip(keys, keys))
         
     if xftf_kwargs is None:
         xftf_kwargs = {}
@@ -1879,40 +1879,59 @@ def feffit_multi_aligned(
         
     trans = lx.feffit_transform(**xftf_kwargs)
 
-    if parameter_dict is None:
-        parameter_dict: dict = {}
-        
     feffit_datasets: dict = {}
-    
-    ## iterate over selected groups
-    for key in keys:
-        if pathlist_dict is not None and key in pathlist_dict:
-            pathlist = pathlist_dict[key]
-        else:
-            pathlist, parameter_sub_dict = generate_pathlist(
-                path_dict=path_dict,
-                std_dir=std_dir,
-                linked_params=linked_params,
-                param_suffix=param_suffixes[key],
-                parameter_dict=parameter_dict,
-                sig_initial=sig_initial,
-                sig_kwargs=sig_kwargs,
-                dr_initial=dr_initial,
-                dr_kwargs=dr_kwargs,
-                n_kwargs=n_kwargs,
-                c3_initial=c3_initial,
-                c3_kwargs=c3_kwargs,
-            )
-            parameter_dict.update(parameter_sub_dict)
-            
-        feffit_datasets[key] = lx.feffit_dataset(data=groups[key], pathlist=pathlist, transform=trans)
 
-    parameter_group = param_group(
-        s02=param(s02, vary=False, min=0.5, max=1.25),
-        **parameter_dict
-    )
+    # Branch 1: use prebuilt FEFF paths and parameter group directly.
+    if pathlist_dict is not None or parameter_group is not None:
+        if pathlist_dict is None or parameter_group is None:
+            raise ValueError("Both `pathlist_dict` and `parameter_group` must be provided together.")
 
-    results = lx.feffit(parameter_group, feffit_datasets.values(), method=method)
+        for key in keys:
+            feffit_datasets[key] = lx.feffit_dataset(data=groups[key], pathlist=pathlist_dict[key], transform=trans)
+
+    # Branch 2: legacy path generation from std_dir/path_dict/linked_params.
+    else:
+        keys_missing_pathlist = [k for k in keys if pathlist_dict is None or k not in pathlist_dict]
+        if len(keys_missing_pathlist) > 0 and path_dict is None:
+            raise ValueError("`path_dict` is required when `feff_paths` is not provided.")
+        if len(keys_missing_pathlist) > 0 and linked_params is None:
+            raise ValueError("`linked_params` is required when `feff_paths` is not provided.")
+
+        if param_suffixes is None:
+            param_suffixes = dict(zip(keys, keys))
+
+        if parameter_dict is None:
+            parameter_dict = {}
+
+        ## iterate over selected groups
+        for key in keys:
+            if pathlist_dict is not None and key in pathlist_dict:
+                pathlist = pathlist_dict[key]
+            else:
+                pathlist, parameter_sub_dict = generate_pathlist(
+                    path_dict=path_dict,
+                    std_dir=std_dir,
+                    linked_params=linked_params,
+                    param_suffix=param_suffixes[key],
+                    parameter_dict=parameter_dict,
+                    sig_initial=sig_initial,
+                    sig_kwargs=sig_kwargs,
+                    dr_initial=dr_initial,
+                    dr_kwargs=dr_kwargs,
+                    n_kwargs=n_kwargs,
+                    c3_initial=c3_initial,
+                    c3_kwargs=c3_kwargs,
+                )
+                parameter_dict.update(parameter_sub_dict)
+
+            feffit_datasets[key] = lx.feffit_dataset(data=groups[key], pathlist=pathlist, transform=trans)
+
+        parameter_group = param_group(
+            s02=param(s02, vary=False, min=0.5, max=1.25),
+            **parameter_dict
+        )
+
+    results = lx.feffit(parameter_group, feffit_datasets.values(), method=method, **kwargs)
 
     if save_file is not None:
         with open(save_file, 'w') as f:
