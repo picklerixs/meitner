@@ -1810,7 +1810,7 @@ def generate_pathlist(
     }
     
     if c3_kwargs is None:
-        c3_kwargs = {"vary": False}
+        c3_kwargs = {"value": 0.0, "vary": False}
 
     pathlist = []
     for i, (path_name, n) in enumerate(path_dict.items()):
@@ -1856,7 +1856,7 @@ def feffit_multi_aligned(
     dr_initial: float = 0.0,
     dr_kwargs: dict = {'min': -0.35, 'max': 0.15, 'vary': True},
     n_kwargs: dict = {'vary': False},
-    c3_initial: float = 0.0001,
+    c3_initial: float = 0.0,
     c3_kwargs: dict | None = None,
     s02: float = 1.0,
     save_file: pathlib.Path | None = None,
@@ -1875,7 +1875,7 @@ def feffit_multi_aligned(
         xftf_kwargs = {}
         
     if c3_kwargs is None:
-        c3_kwargs = {"vary": False}
+        c3_kwargs = {"value": 0.0, "vary": False}
         
     trans = lx.feffit_transform(**xftf_kwargs)
 
