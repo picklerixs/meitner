@@ -1258,6 +1258,8 @@ class Larch:
         plot_model: bool = True,
         legend: bool = True,
         plot_text: bool = True,
+        plot_re: bool = True,
+        y_offset=0,
         fig=None,
         ax=None,
     ):
@@ -1323,11 +1325,13 @@ class Larch:
         rmin = dset.transform.rmin
         rmax = dset.transform.rmax
         
-        ax.plot(dset.data.r, dset.data.chir_mag, label="Data", **plot_data_kwargs)
-        ax.plot(dset.data.r, dset.data.chir_re, **plot_data_kwargs)
+        ax.plot(dset.data.r, dset.data.chir_mag + y_offset, label="Data", **plot_data_kwargs)
+        if plot_re:
+            ax.plot(dset.data.r, dset.data.chir_re + y_offset, **plot_data_kwargs)
         if plot_model:
-            ax.plot(dset.model.r, dset.model.chir_mag, **plot_model_kwargs)
-            ax.plot(dset.model.r, dset.model.chir_re, **plot_model_kwargs)
+            ax.plot(dset.model.r, dset.model.chir_mag + y_offset, **plot_model_kwargs)
+            if plot_re:
+                ax.plot(dset.model.r, dset.model.chir_re + y_offset, **plot_model_kwargs)
         
         if plot_text:
             ax.text(
